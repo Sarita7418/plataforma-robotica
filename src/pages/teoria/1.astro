@@ -1,0 +1,1138 @@
+---
+import Layout from '../../layouts/Layout.astro';
+---
+<Layout title="Teoría: Variables">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+  :root {
+    --bg-deep:        #0d1117;
+    --bg-card:        #161b22;
+    --border:         rgba(255,255,255,0.07);
+    --border-bright:  rgba(255,255,255,0.13);
+    --blue:           #3b82f6;
+    --blue-light:     #60a5fa;
+    --cyan:           #22d3ee;
+    --green:          #4ade80;
+    --yellow:         #facc15;
+    --purple:         #a78bfa;
+    --red:            #f87171;
+    --orange:         #fb923c;
+    --text-primary:   #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted:     #64748b;
+    --mono:           'JetBrains Mono', monospace;
+    --body:           'Inter', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    font-family: var(--body);
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+
+  main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 6rem;
+  }
+
+  /* ── Back link ── */
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.82rem;
+    font-family: var(--mono);
+    margin-bottom: 3rem;
+    padding: 0.45rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    transition: all 0.2s;
+    background: rgba(255,255,255,0.02);
+  }
+  .back-link:hover { color: var(--blue-light); border-color: rgba(59,130,246,0.4); }
+
+  /* ── Header ── */
+  .page-header {
+    margin-bottom: 3.5rem;
+    padding-bottom: 2.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .module-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--blue);
+    background: rgba(59,130,246,0.1);
+    border: 1px solid rgba(59,130,246,0.25);
+    padding: 0.3rem 0.9rem;
+    border-radius: 100px;
+    margin-bottom: 1.25rem;
+  }
+  .module-badge::before {
+    content: '';
+    width: 6px; height: 6px;
+    background: var(--blue);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50%      { opacity:0.5; transform:scale(0.8); }
+  }
+
+  .page-title {
+    font-family: var(--body);
+    font-size: clamp(2rem, 4.5vw, 3rem);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    color: var(--text-primary);
+    margin-bottom: 1rem;
+  }
+  .page-title span {
+    background: linear-gradient(135deg, var(--blue-light), var(--cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .page-subtitle {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    max-width: 600px;
+    font-weight: 400;
+    line-height: 1.75;
+  }
+
+  .topic-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-top: 1.75rem;
+  }
+  .pill {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    padding: 0.28rem 0.7rem;
+    border-radius: 100px;
+    border: 1px solid var(--border-bright);
+    color: var(--text-muted);
+    background: rgba(255,255,255,0.02);
+  }
+  .pill.active {
+    color: var(--cyan);
+    border-color: rgba(34,211,238,0.3);
+    background: rgba(34,211,238,0.07);
+  }
+
+  /* ── Section number badge ── */
+  .section-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem; height: 2rem;
+    background: var(--blue);
+    color: white;
+    border-radius: 50%;
+    font-size: 0.8rem;
+    font-weight: 700;
+    font-family: var(--mono);
+    flex-shrink: 0;
+  }
+
+  .section-heading {
+    font-family: var(--body);
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+
+  /* ── Cards — NO overflow:hidden ── */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 2rem 2.25rem 1.75rem;
+    margin-bottom: 2rem;
+    position: relative;
+    transition: border-color 0.25s;
+  }
+  .card:hover { border-color: var(--border-bright); }
+
+  /* Top shimmer line */
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    border-radius: 14px 14px 0 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.07), transparent);
+  }
+
+  .card-accent-blue   { border-left: 3px solid var(--blue); }
+  .card-accent-cyan   { border-left: 3px solid var(--cyan); }
+  .card-accent-green  { border-left: 3px solid var(--green); }
+  .card-accent-yellow { border-left: 3px solid var(--yellow); }
+  .card-accent-purple { border-left: 3px solid var(--purple); }
+  .card-accent-orange { border-left: 3px solid var(--orange); }
+  .card-accent-red    { border-left: 3px solid var(--red); }
+
+  /* ── Card practice button ── */
+  .card-practice-bar {
+    margin-top: 1.75rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+  }
+  .card-practice-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+  .card-practice-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--blue-light);
+    background: rgba(59,130,246,0.1);
+    border: 1px solid rgba(59,130,246,0.3);
+    padding: 0.45rem 1.1rem;
+    border-radius: 7px;
+    text-decoration: none;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .card-practice-btn:hover {
+    background: rgba(59,130,246,0.2);
+    border-color: rgba(59,130,246,0.55);
+    transform: translateX(2px);
+  }
+  .card-practice-btn::after { content: '→'; }
+
+  /* ── Prose ── */
+  .prose {
+    color: var(--text-secondary);
+    font-size: 0.96rem;
+    line-height: 1.8;
+  }
+  .prose strong { color: var(--text-primary); font-weight: 600; }
+  .prose + .prose { margin-top: 0.9rem; }
+
+  /* ── Inline code ── */
+  .ic {
+    font-family: var(--mono);
+    font-size: 0.84em;
+    color: var(--cyan);
+    background: rgba(34,211,238,0.08);
+    padding: 0.13em 0.42em;
+    border-radius: 4px;
+    border: 1px solid rgba(34,211,238,0.14);
+  }
+
+  /* ── Code block ── */
+  .code-block {
+    background: #060c18;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 1.1rem 0;
+  }
+  .code-block-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.55rem 1rem;
+    background: rgba(255,255,255,0.025);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .code-block-lang {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .code-block-dots { display:flex; gap:5px; }
+  .dot { width:8px; height:8px; border-radius:50%; }
+  .dot-red    { background:#ef4444; }
+  .dot-yellow { background:#f59e0b; }
+  .dot-green  { background:#22c55e; }
+
+  .code-block pre {
+    padding: 1.15rem 1.4rem;
+    font-family: var(--mono);
+    font-size: 0.855rem;
+    line-height: 1.75;
+    overflow-x: auto;
+    margin: 0;
+    white-space: pre;
+  }
+  .kw { color:#c084fc; }
+  .ty { color:#67e8f9; }
+  .va { color:#a5f3fc; }
+  .nu { color:#86efac; }
+  .st { color:#fde68a; }
+  .co { color:#4a5568; }
+  .op { color:#94a3b8; }
+  .fn { color:#93c5fd; }
+
+  /* ── Memory box visual ── */
+  .var-demo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 2.25rem 1rem;
+    background: rgba(0,0,0,0.25);
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.05);
+    margin: 1.5rem 0;
+  }
+  @media (min-width: 600px) {
+    .var-demo { flex-direction:row; justify-content:center; gap:3rem; }
+  }
+  .memory-box-wrap { position:relative; }
+  .memory-box-glow {
+    position:absolute; inset:-8px;
+    background: radial-gradient(circle, rgba(59,130,246,0.18), transparent 70%);
+    border-radius:16px;
+  }
+  .memory-box {
+    position:relative;
+    width:150px; height:150px;
+    background: linear-gradient(135deg,#0f1e35,#0a1628);
+    border: 2px solid rgba(59,130,246,0.38);
+    border-radius:12px;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    gap:0.5rem;
+    box-shadow: 0 0 36px rgba(59,130,246,0.09), inset 0 1px 0 rgba(255,255,255,0.04);
+  }
+  .memory-label {
+    position:absolute; top:-13px;
+    background:var(--blue); color:white;
+    font-family:var(--mono); font-size:0.68rem;
+    padding:0.18rem 0.75rem; border-radius:100px;
+    white-space:nowrap; box-shadow:0 4px 12px rgba(59,130,246,0.38);
+  }
+  .memory-value {
+    font-family:var(--mono); font-size:3rem;
+    font-weight:700; color:var(--blue-light); line-height:1;
+  }
+  .memory-type {
+    font-family:var(--mono); font-size:0.68rem;
+    color:var(--text-muted); background:rgba(255,255,255,0.05);
+    padding:0.12rem 0.45rem; border-radius:4px;
+  }
+  .memory-addr {
+    position:absolute; bottom:-12px;
+    font-family:var(--mono); font-size:0.58rem;
+    color:var(--text-muted); background:var(--bg-card);
+    border:1px solid var(--border); padding:0.1rem 0.5rem; border-radius:4px;
+  }
+
+  /* ── Types grid ── */
+  .types-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+    margin: 1.25rem 0;
+  }
+  @media (min-width: 580px) {
+    .types-grid { grid-template-columns: 1fr 1fr; }
+  }
+  .type-card {
+    background: rgba(0,0,0,0.22);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.3rem 1.4rem;
+    transition: all 0.22s;
+    position: relative;
+  }
+  .type-card:hover { transform:translateY(-2px); background:rgba(0,0,0,0.35); }
+  .type-card.blue   { border-left:3px solid var(--blue); }
+  .type-card.cyan   { border-left:3px solid var(--cyan); }
+  .type-card.yellow { border-left:3px solid var(--yellow); }
+  .type-card.purple { border-left:3px solid var(--purple); }
+  .type-card.green  { border-left:3px solid var(--green); }
+  .type-card.orange { border-left:3px solid var(--orange); }
+
+  .type-name { font-family:var(--mono); font-size:1.05rem; font-weight:700; margin-bottom:0.25rem; }
+  .blue .type-name   { color:var(--blue-light); }
+  .cyan .type-name   { color:var(--cyan); }
+  .yellow .type-name { color:var(--yellow); }
+  .purple .type-name { color:var(--purple); }
+  .green .type-name  { color:var(--green); }
+  .orange .type-name { color:var(--orange); }
+
+  .type-size-badge {
+    display:inline-block; font-family:var(--mono);
+    font-size:0.63rem; padding:0.1rem 0.42rem;
+    border-radius:4px; margin-bottom:0.55rem; opacity:0.8;
+  }
+  .blue .type-size-badge   { background:rgba(59,130,246,0.14);  color:var(--blue-light); }
+  .cyan .type-size-badge   { background:rgba(34,211,238,0.14);  color:var(--cyan); }
+  .yellow .type-size-badge { background:rgba(250,204,21,0.14);  color:var(--yellow); }
+  .purple .type-size-badge { background:rgba(167,139,250,0.14); color:var(--purple); }
+  .green .type-size-badge  { background:rgba(74,222,128,0.14);  color:var(--green); }
+  .orange .type-size-badge { background:rgba(251,146,60,0.14);  color:var(--orange); }
+
+  .type-desc {
+    font-size:0.84rem; color:var(--text-secondary);
+    margin-bottom:0.7rem; line-height:1.6;
+  }
+  .type-example {
+    font-family:var(--mono); font-size:0.78rem;
+    background:rgba(0,0,0,0.38); padding:0.48rem 0.7rem;
+    border-radius:6px; color:#94a3b8;
+    border:1px solid rgba(255,255,255,0.05);
+  }
+  .type-range {
+    font-family:var(--mono); font-size:0.68rem;
+    color:var(--text-muted); margin-top:0.45rem;
+  }
+
+  /* ── Callouts ── */
+  .callout {
+    display:flex; gap:0.9rem;
+    padding:1.1rem 1.35rem;
+    border-radius:9px; margin:1.35rem 0;
+  }
+  .callout-icon { font-size:1.15rem; flex-shrink:0; line-height:1.5; }
+  .callout-body { flex:1; }
+  .callout-title {
+    font-family:var(--body); font-size:0.87rem;
+    font-weight:700; margin-bottom:0.25rem;
+  }
+  .callout-text { font-size:0.85rem; line-height:1.65; }
+
+  .callout.tip  { background:rgba(74,222,128,0.06); border:1px solid rgba(74,222,128,0.2); }
+  .callout.tip .callout-title { color:var(--green); }
+  .callout.tip .callout-text  { color:#86efac; }
+
+  .callout.warning { background:rgba(250,204,21,0.06); border:1px solid rgba(250,204,21,0.2); }
+  .callout.warning .callout-title { color:var(--yellow); }
+  .callout.warning .callout-text  { color:#fde68a; }
+
+  .callout.info { background:rgba(59,130,246,0.06); border:1px solid rgba(59,130,246,0.2); }
+  .callout.info .callout-title { color:var(--blue-light); }
+  .callout.info .callout-text  { color:#bfdbfe; }
+
+  .callout.danger { background:rgba(248,113,113,0.06); border:1px solid rgba(248,113,113,0.2); }
+  .callout.danger .callout-title { color:var(--red); }
+  .callout.danger .callout-text  { color:#fca5a5; }
+
+  /* ── Scope visual ── */
+  .scope-visual {
+    background:rgba(0,0,0,0.28);
+    border:1px solid var(--border);
+    border-radius:10px; padding:1.6rem;
+    margin:1.35rem 0;
+    font-family:var(--mono); font-size:0.8rem; line-height:1.9;
+  }
+  .scope-global {
+    border:1px dashed rgba(59,130,246,0.38);
+    border-radius:7px; padding:1rem 1.2rem;
+    margin-bottom:0.5rem; position:relative;
+  }
+  .scope-local {
+    border:1px dashed rgba(74,222,128,0.28);
+    border-radius:7px; padding:0.9rem 1.1rem;
+    margin:0.65rem 0 0.65rem 2rem; position:relative;
+  }
+  .scope-label {
+    position:absolute; top:-10px; left:10px;
+    font-size:0.63rem; letter-spacing:0.1em;
+    text-transform:uppercase; padding:0.08rem 0.48rem; border-radius:4px;
+  }
+  .scope-global .scope-label { background:rgba(59,130,246,0.18); color:var(--blue-light); }
+  .scope-local  .scope-label { background:rgba(74,222,128,0.14); color:var(--green); }
+  .scope-var-global { color:var(--blue-light); }
+  .scope-var-local  { color:var(--green); }
+  .scope-comment    { color:var(--text-muted); }
+
+  /* ── Tables ── */
+  .data-table { width:100%; border-collapse:collapse; font-size:0.84rem; margin:1.1rem 0; }
+  .data-table th {
+    font-family:var(--mono); font-size:0.7rem;
+    letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--text-muted); padding:0.7rem 0.9rem;
+    text-align:left; border-bottom:1px solid var(--border-bright);
+  }
+  .data-table td {
+    padding:0.75rem 0.9rem;
+    border-bottom:1px solid var(--border);
+    color:var(--text-secondary); vertical-align:middle;
+  }
+  .data-table tr:last-child td { border-bottom:none; }
+  .data-table tr:hover td { background:rgba(255,255,255,0.02); }
+  .td-type { font-family:var(--mono); font-weight:600; }
+
+  .scope-badge {
+    font-family:var(--mono); font-size:0.68rem;
+    padding:0.13rem 0.48rem; border-radius:4px;
+  }
+  .scope-g { background:rgba(59,130,246,0.14); color:var(--blue-light); }
+  .scope-l { background:rgba(74,222,128,0.14); color:var(--green); }
+  .scope-b { background:rgba(167,139,250,0.14); color:var(--purple); }
+
+  /* ── Naming rules ── */
+  .rules-list {
+    list-style:none; display:flex; flex-direction:column;
+    gap:0.65rem; margin:1.1rem 0;
+  }
+  .rules-list li {
+    display:flex; align-items:flex-start;
+    gap:0.7rem; font-size:0.88rem; color:var(--text-secondary);
+  }
+  .rule-icon {
+    width:1.35rem; height:1.35rem; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:0.72rem; flex-shrink:0; margin-top:0.12rem;
+  }
+  .rule-ok { background:rgba(74,222,128,0.14); color:var(--green); }
+  .rule-no { background:rgba(248,113,113,0.14); color:var(--red); }
+
+  /* ── Convention grid ── */
+  .convention-grid {
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+    gap:0.7rem; margin:1.1rem 0;
+  }
+  .convention-item {
+    background:rgba(0,0,0,0.28); border:1px solid var(--border);
+    border-radius:8px; padding:0.85rem 0.95rem;
+  }
+  .convention-style  { font-family:var(--mono); font-size:0.78rem; font-weight:700; margin-bottom:0.28rem; }
+  .convention-example{ font-family:var(--mono); font-size:0.73rem; color:var(--cyan); }
+  .convention-desc   { font-size:0.73rem; color:var(--text-muted); margin-top:0.22rem; }
+
+  /* ── Compare grid ── */
+  .compare-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.9rem; margin:1.1rem 0; }
+  @media (max-width:480px) { .compare-grid { grid-template-columns:1fr; } }
+  .compare-good, .compare-bad { border-radius:8px; overflow:hidden; }
+  .compare-good { border:1px solid rgba(74,222,128,0.24); }
+  .compare-bad  { border:1px solid rgba(248,113,113,0.24); }
+  .compare-header {
+    padding:0.38rem 0.72rem;
+    font-family:var(--mono); font-size:0.68rem;
+    letter-spacing:0.08em; text-transform:uppercase;
+  }
+  .compare-good .compare-header { background:rgba(74,222,128,0.09);  color:var(--green); }
+  .compare-bad  .compare-header { background:rgba(248,113,113,0.09); color:var(--red); }
+  .compare-body {
+    background:rgba(0,0,0,0.32); padding:0.85rem 0.95rem;
+    font-family:var(--mono); font-size:0.78rem;
+    color:var(--text-secondary); line-height:1.85;
+  }
+
+  /* ── Section divider ── */
+  .section-divider {
+    display:flex; align-items:center; gap:1rem;
+    margin:2.5rem 0; color:var(--text-muted);
+    font-family:var(--mono); font-size:0.7rem;
+    letter-spacing:0.1em; text-transform:uppercase;
+  }
+  .section-divider::before,.section-divider::after {
+    content:''; flex:1; height:1px; background:var(--border);
+  }
+
+  /* ── Responsive ── */
+  @media (max-width:640px) {
+    .card { padding:1.4rem 1.15rem 1.25rem; }
+  }
+</style>
+
+<main>
+  <a href="/" class="back-link">← Volver al Menú</a>
+
+  <header class="page-header">
+    <div class="module-badge">Módulo 1</div>
+    <h1 class="page-title">Variables y <span>Tipos de Datos</span></h1>
+    <p class="page-subtitle">
+      La base de toda lógica de programación. Aprende cómo la computadora almacena,
+      organiza y recuerda información mientras tu programa está en ejecución.
+    </p>
+    <div class="topic-pills">
+      <span class="pill active">¿Qué es una variable?</span>
+      <span class="pill active">Tipos de datos</span>
+      <span class="pill active">Declaración</span>
+      <span class="pill active">Alcance (Scope)</span>
+      <span class="pill active">Constantes</span>
+      <span class="pill active">Buenas prácticas</span>
+    </div>
+  </header>
+
+
+  <!-- ═══════════════════════════════════════ SECCIÓN 1 ══ -->
+  <section class="card card-accent-blue">
+    <h2 class="section-heading">
+      <span class="section-number">1</span>
+      ¿Qué es una variable?
+    </h2>
+    <p class="prose">
+      Imagina que la memoria RAM de tu computadora (o del robot) es un enorme almacén con millones
+      de casilleros numerados. Una <strong>variable</strong> es una "caja" dentro de ese almacén a la que
+      le pones una etiqueta con un nombre. Esto te permite guardar un dato ahí y luego
+      recuperarlo por su nombre, en lugar de tener que recordar el número de casillero (la dirección de memoria).
+    </p>
+
+    <div class="var-demo">
+      <div class="memory-box-wrap">
+        <div class="memory-box-glow"></div>
+        <div class="memory-box">
+          <span class="memory-label">velocidad_base</span>
+          <span class="memory-value">80</span>
+          <span class="memory-type">int · 4 bytes</span>
+          <span class="memory-addr">0x7ffd2a4c</span>
+        </div>
+      </div>
+      <div style="max-width:290px;">
+        <p class="prose" style="margin-bottom:0.7rem;">En código C++, creamos esta "caja" así:</p>
+        <div class="code-block">
+          <div class="code-block-header">
+            <span class="code-block-lang">C++</span>
+            <div class="code-block-dots">
+              <div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div>
+            </div>
+          </div>
+          <pre><span class="ty">int</span> <span class="va">velocidad_base</span> <span class="op">=</span> <span class="nu">80</span><span class="op">;</span></pre>
+        </div>
+        <p class="prose" style="font-size:0.81rem;margin-top:0.45rem;">
+          La dirección de memoria (como <span class="ic">0x7ffd2a4c</span>) la maneja el sistema operativo. ¡Tú solo usas el nombre!
+        </p>
+      </div>
+    </div>
+
+    <div class="callout info">
+      <span class="callout-icon">💡</span>
+      <div class="callout-body">
+        <div class="callout-title">¿Por qué se llaman "variables"?</div>
+        <div class="callout-text">Porque su valor puede <strong>cambiar (variar)</strong> durante la ejecución del programa.
+        A diferencia de las constantes, una variable puede tener el valor 80 ahora y 120 después.</div>
+      </div>
+    </div>
+
+    <div class="card-practice-bar">
+      <span class="card-practice-label">¿Entendiste el concepto?</span>
+      <a href="/ejercicio/1" class="card-practice-btn">Practicar esta sección</a>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════ SECCIÓN 2 ══ -->
+  <section class="card card-accent-cyan">
+    <h2 class="section-heading">
+      <span class="section-number">2</span>
+      Declaración, Inicialización y Asignación
+    </h2>
+    <p class="prose">
+      Estas tres operaciones parecen iguales pero son conceptualmente distintas. Entenderlas evitará muchos errores.
+    </p>
+
+    <div class="code-block" style="margin-top:1.35rem;">
+      <div class="code-block-header">
+        <span class="code-block-lang">C++ · Operaciones fundamentales</span>
+        <div class="code-block-dots">
+          <div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div>
+        </div>
+      </div>
+      <pre><span class="co">// 1) DECLARACIÓN: le decimos al compilador que existirá una variable</span>
+<span class="co">//    llamada "velocidad" de tipo entero. AÚN NO TIENE VALOR DEFINIDO.</span>
+<span class="ty">int</span> <span class="va">velocidad</span><span class="op">;</span>
+
+<span class="co">// 2) INICIALIZACIÓN: declaramos Y asignamos un valor por primera vez</span>
+<span class="co">//    Esta es la forma recomendada. Evita errores de "basura en memoria".</span>
+<span class="ty">int</span> <span class="va">velocidad</span> <span class="op">=</span> <span class="nu">80</span><span class="op">;</span>       <span class="co">// Sintaxis clásica (C)</span>
+<span class="ty">int</span> <span class="va">velocidad</span><span class="op">{</span><span class="nu">80</span><span class="op">};</span>          <span class="co">// Sintaxis moderna (C++11+, recomendada)</span>
+
+<span class="co">// 3) ASIGNACIÓN: cambiamos el valor después de la declaración</span>
+<span class="va">velocidad</span> <span class="op">=</span> <span class="nu">120</span><span class="op">;</span>            <span class="co">// Ahora la "caja" contiene 120 en vez de 80</span></pre>
+    </div>
+
+    <div class="callout warning">
+      <span class="callout-icon">⚠️</span>
+      <div class="callout-body">
+        <div class="callout-title">Cuidado con las variables no inicializadas</div>
+        <div class="callout-text">Si declaras <span class="ic" style="color:#fde68a">int velocidad;</span> sin darle valor,
+        su contenido es <strong>basura</strong> (lo que había en esa posición de memoria antes).
+        Inicializa siempre tus variables.</div>
+      </div>
+    </div>
+
+    <div class="card-practice-bar">
+      <span class="card-practice-label">¿Entendiste el concepto?</span>
+      <a href="/ejercicio/2" class="card-practice-btn">Practicar esta sección</a>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════ SECCIÓN 3 ══ -->
+  <section class="card">
+    <h2 class="section-heading">
+      <span class="section-number">3</span>
+      Tipos de Datos en C++
+    </h2>
+    <p class="prose">
+      No todas las "cajas" son iguales. En C++ debes especificar qué tipo de dato vas a guardar porque
+      eso determina cuánta memoria se reserva y qué operaciones puedes hacer.
+    </p>
+
+    <div class="types-grid" style="margin-top:1.25rem;">
+      <div class="type-card blue">
+        <div class="type-name">int</div>
+        <span class="type-size-badge">4 bytes · Entero con signo</span>
+        <p class="type-desc">Números enteros sin decimales. Ideal para contadores, velocidades y pines de Arduino.</p>
+        <div class="type-example"><span class="ty">int</span> motores <span class="op">=</span> <span class="nu">2</span><span class="op">;</span><br><span class="ty">int</span> velocidad <span class="op">=</span> <span class="op">-</span><span class="nu">50</span><span class="op">;</span></div>
+        <div class="type-range">Rango: −2,147,483,648 a 2,147,483,647</div>
+      </div>
+
+      <div class="type-card cyan">
+        <div class="type-name">float</div>
+        <span class="type-size-badge">4 bytes · Punto flotante</span>
+        <p class="type-desc">Números con decimales de precisión simple. Perfecto para mediciones de sensores.</p>
+        <div class="type-example"><span class="ty">float</span> distancia <span class="op">=</span> <span class="nu">12.5f</span><span class="op">;</span><br><span class="ty">float</span> voltaje <span class="op">=</span> <span class="nu">3.14f</span><span class="op">;</span></div>
+        <div class="type-range">~6–7 dígitos significativos</div>
+      </div>
+
+      <div class="type-card green">
+        <div class="type-name">double</div>
+        <span class="type-size-badge">8 bytes · Doble precisión</span>
+        <p class="type-desc">Como float pero con el doble de precisión. Úsalo en cálculos científicos o de navegación.</p>
+        <div class="type-example"><span class="ty">double</span> pi <span class="op">=</span> <span class="nu">3.14159265358979</span><span class="op">;</span></div>
+        <div class="type-range">~15–17 dígitos significativos</div>
+      </div>
+
+      <div class="type-card orange">
+        <div class="type-name">char</div>
+        <span class="type-size-badge">1 byte · Carácter ASCII</span>
+        <p class="type-desc">Un solo carácter. Internamente es un número (código ASCII). Se escribe con comillas simples.</p>
+        <div class="type-example"><span class="ty">char</span> letra <span class="op">=</span> <span class="st">'A'</span><span class="op">;</span> <span class="co">// = 65</span><br><span class="ty">char</span> cmd <span class="op">=</span> <span class="st">'F'</span><span class="op">;</span></div>
+        <div class="type-range">256 caracteres (0–255)</div>
+      </div>
+
+      <div class="type-card yellow">
+        <div class="type-name">String</div>
+        <span class="type-size-badge">Variable · Cadena de texto</span>
+        <p class="type-desc">Secuencia de caracteres. En Arduino es una clase; en C++ estándar se usa <span class="ic" style="color:#fde68a">std::string</span>.</p>
+        <div class="type-example"><span class="ty">String</span> estado <span class="op">=</span> <span class="st">"Activo"</span><span class="op">;</span><br><span class="ty">String</span> msg <span class="op">=</span> <span class="st">"Hola Robot"</span><span class="op">;</span></div>
+        <div class="type-range">Comillas dobles, longitud dinámica</div>
+      </div>
+
+      <div class="type-card purple">
+        <div class="type-name">bool</div>
+        <span class="type-size-badge">1 byte · Booleano</span>
+        <p class="type-desc">Solo puede ser <strong>true</strong> (1) o <strong>false</strong> (0). Es la base de toda lógica condicional.</p>
+        <div class="type-example"><span class="ty">bool</span> obstaculo <span class="op">=</span> <span class="kw">true</span><span class="op">;</span><br><span class="ty">bool</span> modoAuto <span class="op">=</span> <span class="kw">false</span><span class="op">;</span></div>
+        <div class="type-range">true (1) · false (0)</div>
+      </div>
+    </div>
+
+    <h3 style="font-family:var(--body);font-size:1rem;color:var(--text-secondary);margin:1.75rem 0 0.65rem;font-weight:600;">Tabla comparativa</h3>
+    <div style="overflow-x:auto;border-radius:9px;border:1px solid var(--border);">
+      <table class="data-table">
+        <thead>
+          <tr><th>Tipo</th><th>Tamaño</th><th>¿Decimales?</th><th>Ejemplo de uso en robot</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="td-type" style="color:var(--blue-light)">int</td><td>4 bytes</td><td>No</td><td>Velocidad del motor, pin GPIO</td></tr>
+          <tr><td class="td-type" style="color:var(--cyan)">float</td><td>4 bytes</td><td>Sí (~7)</td><td>Distancia del sensor ultrasónico</td></tr>
+          <tr><td class="td-type" style="color:var(--green)">double</td><td>8 bytes</td><td>Sí (~16)</td><td>Cálculos de navegación GPS</td></tr>
+          <tr><td class="td-type" style="color:var(--orange)">char</td><td>1 byte</td><td>No</td><td>Comandos por Bluetooth ('F','B','L')</td></tr>
+          <tr><td class="td-type" style="color:var(--yellow)">String</td><td>Variable</td><td>N/A</td><td>Mensajes al monitor serial</td></tr>
+          <tr><td class="td-type" style="color:var(--purple)">bool</td><td>1 byte</td><td>No</td><td>Estado de sensores, modo de operación</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-practice-bar">
+      <span class="card-practice-label">¿Entendiste el concepto?</span>
+      <a href="/ejercicio/3" class="card-practice-btn">Practicar esta sección</a>
+    </div>
+  </section>
+
+
+  <div class="section-divider">Conceptos avanzados</div>
+
+
+  <!-- ═══════════════════════════════════════ SECCIÓN 4 ══ -->
+  <section class="card card-accent-yellow">
+    <h2 class="section-heading">
+      <span class="section-number">4</span>
+      Constantes: cuando el valor no debe cambiar
+    </h2>
+    <p class="prose">
+      A veces tienes valores que <strong>nunca deben cambiar</strong> durante la ejecución del programa.
+      Para eso existen las constantes. Usarlas evita errores accidentales y hace el código más legible.
+    </p>
+
+    <div class="code-block" style="margin-top:1.25rem;">
+      <div class="code-block-header">
+        <span class="code-block-lang">C++ · Tres formas de definir constantes</span>
+        <div class="code-block-dots">
+          <div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div>
+        </div>
+      </div>
+      <pre><span class="co">// OPCIÓN 1: const (recomendada en C++ moderno)</span>
+<span class="co">//           El compilador verifica el tipo y el alcance.</span>
+<span class="kw">const</span> <span class="ty">int</span>   <span class="va">VELOCIDAD_MAX</span> <span class="op">=</span> <span class="nu">255</span><span class="op">;</span>
+<span class="kw">const</span> <span class="ty">float</span> <span class="va">PI</span>            <span class="op">=</span> <span class="nu">3.14159f</span><span class="op">;</span>
+
+<span class="co">// OPCIÓN 2: constexpr (C++11+) — se evalúa en tiempo de compilación</span>
+<span class="kw">constexpr</span> <span class="ty">int</span> <span class="va">PIN_MOTOR_IZQ</span> <span class="op">=</span> <span class="nu">9</span><span class="op">;</span>
+
+<span class="co">// OPCIÓN 3: #define — antigua, evitar si puedes (no tiene tipo)</span>
+<span class="op">#</span><span class="kw">define</span> <span class="va">VELOCIDAD_MAX</span> <span class="nu">255</span>    <span class="co">// Sin punto y coma. Reemplaza el texto.</span>
+
+<span class="co">// Intentar modificar una constante = ERROR de compilación ✓</span>
+<span class="va">VELOCIDAD_MAX</span> <span class="op">=</span> <span class="nu">300</span><span class="op">;</span>   <span class="co">// ❌ error: assignment of read-only variable</span></pre>
+    </div>
+
+    <div class="callout tip">
+      <span class="callout-icon">✅</span>
+      <div class="callout-body">
+        <div class="callout-title">Convención de nombres para constantes</div>
+        <div class="callout-text">Por convención, los nombres de constantes se escriben en
+        <strong>MAYÚSCULAS_CON_GUIÓN_BAJO</strong> para distinguirlas visualmente.
+        Ejemplo: <span class="ic" style="color:#86efac">PIN_LED = 13</span>, <span class="ic" style="color:#86efac">UMBRAL_DISTANCIA = 20</span>.</div>
+      </div>
+    </div>
+
+    <div class="card-practice-bar">
+      <span class="card-practice-label">¿Entendiste el concepto?</span>
+      <a href="/ejercicio/4" class="card-practice-btn">Practicar esta sección</a>
+    </div>
+  </section>
+
+
+  
+
+
+  <!-- ═══════════════════════════════════════ SECCIÓN 6 ══ -->
+  <section class="card card-accent-purple">
+    <h2 class="section-heading">
+      <span class="section-number">6</span>
+      Modificadores de Tipos
+    </h2>
+    <p class="prose">
+      C++ permite modificar los tipos básicos para ajustar su rango o tamaño. Esto es especialmente
+      importante en sistemas embebidos como Arduino, donde la memoria es limitada.
+    </p>
+
+    <div class="code-block" style="margin-top:1.25rem;">
+      <div class="code-block-header">
+        <span class="code-block-lang">C++ · Modificadores</span>
+        <div class="code-block-dots">
+          <div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div>
+        </div>
+      </div>
+      <pre><span class="co">// unsigned: solo números positivos (duplica el rango positivo)</span>
+<span class="ty">unsigned int</span> <span class="va">pasos</span>      <span class="op">=</span> <span class="nu">60000</span><span class="op">;</span>  <span class="co">// 0 a 4,294,967,295</span>
+
+<span class="co">// short: entero más pequeño (2 bytes en vez de 4)</span>
+<span class="ty">short</span> <span class="va">temperatura</span>       <span class="op">=</span> <span class="op">-</span><span class="nu">40</span><span class="op">;</span>    <span class="co">// −32,768 a 32,767</span>
+
+<span class="co">// long: entero más grande (8 bytes)</span>
+<span class="ty">long</span> <span class="va">tiempoMs</span>           <span class="op">=</span> <span class="fn">millis</span><span class="op">();</span> <span class="co">// Útil en Arduino para tiempos largos</span>
+
+<span class="co">// byte (Arduino): equivale a unsigned char, muy común en robots</span>
+<span class="ty">byte</span> <span class="va">brillo</span>             <span class="op">=</span> <span class="nu">255</span><span class="op">;</span>    <span class="co">// 0 a 255 (perfecta para PWM)</span>
+
+<span class="co">// Tipos de tamaño fijo (C++11, más portables)</span>
+<span class="ty">uint8_t</span>  <span class="va">pinLED</span>    <span class="op">=</span> <span class="nu">13</span><span class="op">;</span>          <span class="co">// Exactamente 8 bits sin signo</span>
+<span class="ty">int16_t</span>  <span class="va">error</span>     <span class="op">=</span> <span class="op">-</span><span class="nu">1000</span><span class="op">;</span>       <span class="co">// Exactamente 16 bits con signo</span>
+<span class="ty">uint32_t</span> <span class="va">timestamp</span> <span class="op">=</span> <span class="nu">0</span><span class="op">;</span>           <span class="co">// Exactamente 32 bits sin signo</span></pre>
+    </div>
+
+    <div class="callout tip">
+      <span class="callout-icon">🤖</span>
+      <div class="callout-body">
+        <div class="callout-title">¿Por qué importa esto en el robot?</div>
+        <div class="callout-text">El Arduino UNO solo tiene <strong>2KB de RAM</strong>. Usar <span class="ic" style="color:#86efac">byte</span>
+        en vez de <span class="ic" style="color:#86efac">int</span> cuando el valor cabe en 0–255 (como PWM o valores de pines)
+        ahorra 3 bytes por variable. En programas grandes, eso se acumula.</div>
+      </div>
+    </div>
+
+    <div class="card-practice-bar">
+      <span class="card-practice-label">¿Entendiste el concepto?</span>
+      <a href="/ejercicio/6" class="card-practice-btn">Practicar esta sección</a>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════ SECCIÓN 7 ══ -->
+  <section class="card card-accent-orange">
+    <h2 class="section-heading">
+      <span class="section-number">7</span>
+      Reglas para Nombrar Variables
+    </h2>
+    <p class="prose">
+      Elegir buenos nombres es una habilidad fundamental. Un nombre malo puede hacer que
+      tu propio código te resulte incomprensible en dos semanas.
+    </p>
+
+    <ul class="rules-list">
+      <li>
+        <span class="rule-icon rule-ok">✓</span>
+        <span>Puedes usar letras (<span class="ic">a–z</span>, <span class="ic">A–Z</span>), dígitos (<span class="ic">0–9</span>) y guión bajo (<span class="ic">_</span>).</span>
+      </li>
+      <li>
+        <span class="rule-icon rule-no">✗</span>
+        <span>No puede comenzar con un dígito. <span class="ic" style="color:var(--red)">1velocidad</span> es inválido; <span class="ic">velocidad1</span> sí.</span>
+      </li>
+      <li>
+        <span class="rule-icon rule-no">✗</span>
+        <span>No puede ser una <strong>palabra reservada</strong>: <span class="ic" style="color:var(--red)">int</span>, <span class="ic" style="color:var(--red)">for</span>, <span class="ic" style="color:var(--red)">while</span>, <span class="ic" style="color:var(--red)">return</span>, etc.</span>
+      </li>
+      <li>
+        <span class="rule-icon rule-no">✗</span>
+        <span>No puede tener espacios ni caracteres especiales: <span class="ic" style="color:var(--red)">velocidad base</span> o <span class="ic" style="color:var(--red)">v@r</span> son inválidos.</span>
+      </li>
+      <li>
+        <span class="rule-icon rule-ok">✓</span>
+        <span>C++ es <strong>case-sensitive</strong>: <span class="ic">velocidad</span>, <span class="ic">Velocidad</span> y <span class="ic">VELOCIDAD</span> son tres variables distintas.</span>
+      </li>
+    </ul>
+
+    <h3 style="font-family:var(--body);font-size:0.97rem;color:var(--text-secondary);margin:1.6rem 0 0.65rem;font-weight:600;">Convenciones de estilo más usadas</h3>
+    <div class="convention-grid">
+      <div class="convention-item">
+        <div class="convention-style" style="color:var(--blue-light)">camelCase</div>
+        <div class="convention-example">velocidadBase<br>modoAutonomo</div>
+        <div class="convention-desc">Variables y funciones en C++ y Arduino</div>
+      </div>
+      <div class="convention-item">
+        <div class="convention-style" style="color:var(--green)">snake_case</div>
+        <div class="convention-example">velocidad_base<br>modo_autonomo</div>
+        <div class="convention-desc">Muy legible, común en C puro y Python</div>
+      </div>
+      <div class="convention-item">
+        <div class="convention-style" style="color:var(--yellow)">SCREAMING_SNAKE</div>
+        <div class="convention-example">VELOCIDAD_MAX<br>PIN_MOTOR</div>
+        <div class="convention-desc">Solo para constantes</div>
+      </div>
+      <div class="convention-item">
+        <div class="convention-style" style="color:var(--purple)">PascalCase</div>
+        <div class="convention-example">VelocidadBase<br>ModoAutonomo</div>
+        <div class="convention-desc">Clases y tipos de datos en C++</div>
+      </div>
+    </div>
+
+    <h3 style="font-family:var(--body);font-size:0.97rem;color:var(--text-secondary);margin:1.6rem 0 0.65rem;font-weight:600;">Nombres buenos vs. malos</h3>
+    <div class="compare-grid">
+      <div class="compare-good">
+        <div class="compare-header">✅ Buenos nombres</div>
+        <div class="compare-body">
+          <div style="color:var(--cyan)">int <span style="color:#86efac">velocidadMotorDerecho</span> = 80;</div>
+          <div style="color:var(--cyan)">float <span style="color:#86efac">distanciaObstaculo</span> = 0.0f;</div>
+          <div style="color:var(--cyan)">bool <span style="color:#86efac">sensorActivado</span> = false;</div>
+          <div style="color:var(--cyan)">int <span style="color:#86efac">contadorVueltas</span> = 0;</div>
+        </div>
+      </div>
+      <div class="compare-bad">
+        <div class="compare-header">❌ Malos nombres</div>
+        <div class="compare-body">
+          <div style="color:var(--text-muted)">int <span style="color:#f87171">v</span> = 80;      <span style="opacity:0.5">// ¿Qué es v?</span></div>
+          <div style="color:var(--text-muted)">float <span style="color:#f87171">x2</span> = 0.0f;  <span style="opacity:0.5">// Sin contexto</span></div>
+          <div style="color:var(--text-muted)">bool <span style="color:#f87171">flag</span> = false; <span style="opacity:0.5">// ¿Qué flag?</span></div>
+          <div style="color:var(--text-muted)">int <span style="color:#f87171">temp99</span> = 0;  <span style="opacity:0.5">// Confuso</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-practice-bar">
+      <span class="card-practice-label">¿Entendiste el concepto?</span>
+      <a href="/ejercicio/7" class="card-practice-btn">Practicar esta sección</a>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════ SECCIÓN 8 ══ -->
+  <section class="card card-accent-red">
+    <h2 class="section-heading">
+      <span class="section-number">8</span>
+      Conversión de Tipos (Type Casting)
+    </h2>
+    <p class="prose">
+      A veces necesitas convertir un tipo de dato en otro. Esto puede ocurrir automáticamente
+      (<strong>conversión implícita</strong>) o debes hacerlo tú explícitamente (<strong>cast</strong>).
+    </p>
+
+    <div class="code-block" style="margin-top:1.25rem;">
+      <div class="code-block-header">
+        <span class="code-block-lang">C++ · Type Casting</span>
+        <div class="code-block-dots">
+          <div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div>
+        </div>
+      </div>
+      <pre><span class="co">// CONVERSIÓN IMPLÍCITA (automática, puede causar pérdida de datos)</span>
+<span class="ty">int</span>   <span class="va">entero</span>   <span class="op">=</span> <span class="nu">7</span><span class="op">;</span>
+<span class="ty">float</span> <span class="va">decimal</span>  <span class="op">=</span> <span class="va">entero</span><span class="op">;</span>  <span class="co">// OK: int → float = 7.0 (sin pérdida)</span>
+<span class="ty">int</span>   <span class="va">truncado</span> <span class="op">=</span> <span class="nu">3.9f</span><span class="op">;</span>    <span class="co">// ⚠ float → int = 3 (PIERDE los decimales)</span>
+
+<span class="co">// CONVERSIÓN EXPLÍCITA (cast estilo C, funciona en Arduino)</span>
+<span class="ty">float</span> <span class="va">resultado</span> <span class="op">=</span> (<span class="ty">float</span>)<span class="nu">5</span> <span class="op">/</span> <span class="nu">2</span><span class="op">;</span>  <span class="co">// = 2.5 ✓ (sin cast: 5/2 = 2 en enteros)</span>
+<span class="ty">int</span>   <span class="va">redondeado</span> <span class="op">=</span> (<span class="ty">int</span>)<span class="nu">3.7f</span><span class="op">;</span>  <span class="co">// = 3 (trunca, no redondea)</span>
+
+<span class="co">// CAST MODERNO en C++ (más seguro y explícito)</span>
+<span class="ty">double</span> <span class="va">d</span> <span class="op">=</span> <span class="kw">static_cast</span><span class="op">&lt;</span><span class="ty">double</span><span class="op">&gt;(</span><span class="va">entero</span><span class="op">);</span>
+
+<span class="co">// CASO REAL en robot: calcular porcentaje de batería</span>
+<span class="ty">int</span>   <span class="va">lecturaADC</span>  <span class="op">=</span> <span class="fn">analogRead</span><span class="op">(</span><span class="va">A0</span><span class="op">);</span>        <span class="co">// 0 a 1023</span>
+<span class="ty">float</span> <span class="va">porcentaje</span>  <span class="op">=</span> (<span class="ty">float</span>)<span class="va">lecturaADC</span> <span class="op">/</span> <span class="nu">1023.0f</span> <span class="op">*</span> <span class="nu">100.0f</span><span class="op">;</span></pre>
+    </div>
+
+    <div class="callout danger">
+      <span class="callout-icon">🔴</span>
+      <div class="callout-body">
+        <div class="callout-title">División entera: el error más común</div>
+        <div class="callout-text">En C++, <span class="ic" style="color:#fca5a5">5 / 2</span> NO es <code>2.5</code>, es <code>2</code>.
+        Cuando ambos operandos son enteros, el resultado también es entero (se trunca).
+        Para obtener <code>2.5</code> necesitas al menos un float: <span class="ic" style="color:#fca5a5">5.0f / 2</span>.</div>
+      </div>
+    </div>
+
+    <div class="card-practice-bar">
+      <span class="card-practice-label">¿Entendiste el concepto?</span>
+      <a href="/ejercicio/8" class="card-practice-btn">Practicar esta sección</a>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════ SECCIÓN 9 ══ -->
+  <section class="card">
+    <h2 class="section-heading">
+      <span class="section-number">9</span>
+      Declaración Múltiple y Operadores de Actualización
+    </h2>
+    <p class="prose">
+      C++ ofrece formas compactas de declarar variables y modificarlas en el lugar, lo que hace el código más conciso y legible.
+    </p>
+
+    <div class="code-block" style="margin-top:1.25rem;">
+      <div class="code-block-header">
+        <span class="code-block-lang">C++ · Técnicas de declaración</span>
+        <div class="code-block-dots">
+          <div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div>
+        </div>
+      </div>
+      <pre><span class="co">// Declarar múltiples variables del mismo tipo en una línea</span>
+<span class="ty">int</span> <span class="va">pinMotorA</span> <span class="op">=</span> <span class="nu">9</span><span class="op">,</span> <span class="va">pinMotorB</span> <span class="op">=</span> <span class="nu">10</span><span class="op">,</span> <span class="va">pinMotorC</span> <span class="op">=</span> <span class="nu">11</span><span class="op">;</span>
+
+<span class="co">// Swap de variables (intercambiar valores)</span>
+<span class="ty">int</span> <span class="va">a</span> <span class="op">=</span> <span class="nu">5</span><span class="op">,</span> <span class="va">b</span> <span class="op">=</span> <span class="nu">10</span><span class="op">;</span>
+<span class="ty">int</span> <span class="va">temp</span> <span class="op">=</span> <span class="va">a</span><span class="op">;</span>  <span class="va">a</span> <span class="op">=</span> <span class="va">b</span><span class="op">;</span>  <span class="va">b</span> <span class="op">=</span> <span class="va">temp</span><span class="op">;</span>  <span class="co">// a=10, b=5</span>
+
+<span class="co">// auto (C++11): el compilador deduce el tipo automáticamente</span>
+<span class="kw">auto</span> <span class="va">velocidad</span> <span class="op">=</span> <span class="nu">80</span><span class="op">;</span>      <span class="co">// int   (literal entero)</span>
+<span class="kw">auto</span> <span class="va">distancia</span> <span class="op">=</span> <span class="nu">12.5f</span><span class="op">;</span>   <span class="co">// float (sufijo f)</span>
+<span class="kw">auto</span> <span class="va">nombre</span>    <span class="op">=</span> <span class="st">"Robot"</span><span class="op">;</span> <span class="co">// const char*</span>
+
+<span class="co">// Operadores de actualización: muy comunes en bucles de control</span>
+<span class="va">velocidad</span> <span class="op">+=</span> <span class="nu">10</span><span class="op">;</span>  <span class="co">// velocidad = velocidad + 10</span>
+<span class="va">velocidad</span> <span class="op">-=</span> <span class="nu">5</span><span class="op">;</span>   <span class="co">// velocidad = velocidad - 5</span>
+<span class="va">velocidad</span> <span class="op">*=</span> <span class="nu">2</span><span class="op">;</span>   <span class="co">// velocidad = velocidad * 2</span>
+<span class="va">velocidad</span><span class="op">++;</span>     <span class="co">// post-incremento: equivale a velocidad + 1</span>
+<span class="va">velocidad</span><span class="op">--;</span>     <span class="co">// decremento:      equivale a velocidad - 1</span></pre>
+    </div>
+
+    <div class="callout info">
+      <span class="callout-icon">💡</span>
+      <div class="callout-body">
+        <div class="callout-title">Pre-incremento vs. Post-incremento</div>
+        <div class="callout-text"><span class="ic" style="color:#bfdbfe">++velocidad</span> incrementa primero y luego devuelve el valor.
+        <span class="ic" style="color:#bfdbfe">velocidad++</span> devuelve el valor actual y luego incrementa.
+        La diferencia importa cuando lo usas dentro de una expresión.</div>
+      </div>
+    </div>
+
+    <div class="card-practice-bar">
+      <span class="card-practice-label">¿Entendiste el concepto?</span>
+      <a href="/ejercicio/9" class="card-practice-btn">Practicar esta sección</a>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════ SECCIÓN 5 ══ -->
+  <section class="card card-accent-green">
+    <h2 class="section-heading">
+      <span class="section-number">5</span>
+      Alcance de las Variables (Scope)
+    </h2>
+    <p class="prose">
+      El <strong>alcance</strong> (scope) es la regla que determina dónde "vive" una variable.
+      En programación, no todas las variables pueden ser vistas o utilizadas desde cualquier parte de tu código; el alcance dicta qué partes del programa tienen permiso para acceder a ellas.
+    </p>
+
+    <div style="overflow-x:auto;border-radius:9px;border:1px solid var(--border);margin-top:1.5rem;margin-bottom:1.5rem;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Tipo de Alcance</th>
+            <th>Dónde se declara</th>
+            <th>Visible desde</th>
+            <th>¿Cuánto tiempo vive?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="scope-badge scope-g">Global</span></td>
+            <td>Fuera de todas las funciones</td>
+            <td>Cualquier parte del archivo</td>
+            <td>Todo el tiempo que el programa corra</td>
+          </tr>
+          <tr>
+            <td><span class="scope-badge scope-l">Local</span></td>
+            <td>Dentro de una función</td>
+            <td>Solo dentro de esa función</td>
+            <td>Mientras la función está ejecutándose</td>
+          </tr>
+          <tr>
+            <td><span class="scope-badge scope-b">De Bloque</span></td>
+            <td>Dentro de llaves { } (ej. if, for)</td>
+            <td>Solo dentro de ese bloque</td>
+            <td>Hasta que el bloque se cierra</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warning" style="margin-top:1.1rem;">
+      <span class="callout-icon">⚠️</span>
+      <div class="callout-body">
+        <div class="callout-title">Cuidado con el abuso de variables globales</div>
+        <div class="callout-text">Aunque son cómodas, usarlas en exceso hace el código difícil de depurar. 
+        Cualquier función puede modificarlas accidentalmente. Úsalas solo cuando múltiples funciones 
+        necesiten compartir un estado crítico (como la velocidad del robot o el modo de operación).</div>
+      </div>
+    </div>
+
+    <div class="card-practice-bar">
+      <span class="card-practice-label">¿Entendiste el concepto?</span>
+      <a href="/ejercicio/5" class="card-practice-btn">Practicar esta sección</a>
+    </div>
+  </section>
+
+</main>

@@ -1,0 +1,85 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { supabase } from '../../lib/supabase.js';
+
+export async function getStaticPaths() {
+  const { data: ejercicios } = await supabase.from('ejercicios').select('id');
+  return ejercicios.map((ej) => ({
+    params: { id: ej.id.toString() },
+  }));
+}
+
+const { id } = Astro.params;
+
+const { data: ejercicio } = await supabase
+  .from('ejercicios')
+  .select('*, temas(titulo)')
+  .eq('id', id)
+  .single();
+
+// Input modificado para encajar en el tema oscuro (más sutil)
+const inputHTML = `<input type="number" id="valorInput" class="bg-slate-950 text-blue-400 font-bold w-16 px-2 py-0.5 border-b-2 border-slate-600 outline-none focus:border-blue-500 transition-colors mx-1 text-center" value="255" />`;
+const codigoRenderizado = ejercicio.codigo_inicial.replace('___INPUT___', inputHTML);
+---
+
+<Layout title={`Ejercicio: ${ejercicio.titulo}`}>
+  <main class="max-w-4xl mx-auto p-6 mt-6">
+    <div class="flex justify-between items-end mb-6">
+      <div>
+        <p class="text-blue-500 font-mono text-sm mb-1">Módulo: {ejercicio.temas.titulo}</p>
+        <h1 class="text-3xl font-bold text-slate-100">{ejercicio.titulo}</h1>
+      </div>
+      <a href="/" class="text-slate-400 hover:text-blue-400 hover:underline text-sm font-medium transition-colors">&larr; Menú Principal</a>
+    </div>
+    
+    <div class="bg-blue-950/40 border-l-4 border-blue-500 p-5 rounded-r-lg mb-8 shadow-md">
+      <h2 class="font-bold text-blue-400 text-sm tracking-wider uppercase mb-2">Misión a resolver:</h2>
+      <p class="text-slate-300 leading-relaxed">{ejercicio.mision}</p>
+    </div>
+
+    <div class="bg-black/60 text-slate-300 p-6 rounded-t-lg font-mono text-sm shadow-inner overflow-x-auto border border-slate-700 border-b-0">
+      <pre><code set:html={codigoRenderizado}></code></pre>
+    </div>
+
+    <div class="bg-slate-900 p-5 rounded-b-lg flex flex-col sm:flex-row sm:items-center justify-between border border-slate-700 gap-4">
+      <div id="terminal" class="text-sm text-slate-500 font-mono truncate">
+        <span class="text-blue-500 mr-2">~</span>Estado: Esperando conexión BLE...
+      </div>
+      <div class="flex gap-3 shrink-0">
+        <button id="btnConectar" class="bg-slate-800 text-slate-300 border border-slate-600 px-4 py-2 rounded text-sm font-medium hover:bg-slate-700 hover:text-white transition-all shadow-sm">
+          Vincular Robot
+        </button>
+        <button id="btnEjecutar" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-bold hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-blue-900/20" disabled>
+          ▶ Ejecutar
+        </button>
+      </div>
+    </div>
+  </main>
+</Layout>
+
+<script define:vars={{ comandoEsperado: ejercicio.comando_esperado }}>
+  const btnConectar = document.getElementById('btnConectar');
+  const btnEjecutar = document.getElementById('btnEjecutar');
+  const terminal = document.getElementById('terminal');
+
+  btnConectar.addEventListener('click', async () => {
+    try {
+      terminal.innerHTML = `<span class="text-blue-500 mr-2">~</span>Buscando dispositivo...`;
+      const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true });
+      terminal.innerHTML = `<span class="text-green-500 mr-2">✔</span>Conectado a: <span class="text-slate-300">${device.name}</span>`;
+      btnEjecutar.disabled = false;
+    } catch (error) {
+      terminal.innerHTML = `<span class="text-red-500 mr-2">✖</span>Error: ${error.message}`;
+    }
+  });
+
+  btnEjecutar.addEventListener('click', () => {
+    const inputEstudiante = document.getElementById('valorInput').value;
+    
+    if (inputEstudiante > 100 || inputEstudiante < 0) {
+      terminal.innerHTML = `<span class="text-yellow-500 mr-2">⚠</span>ADVERTENCIA: Valor ${inputEstudiante} fuera de rango. Fallo inminente.`;
+    } else {
+      terminal.innerHTML = `<span class="text-green-500 mr-2">▶</span>Ejecutando: <span class="text-slate-300">AVANZAR_${inputEstudiante}</span>`;
+    }
+  });
+</script>
