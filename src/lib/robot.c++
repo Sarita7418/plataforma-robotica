@@ -22,7 +22,7 @@ const int pinMotorB_PWM = 32; // Pin de velocidad
 // --------------------------------------------------------
 // El objetivo de este PID es mantener el robot yendo en línea recta
 // compensando si un motor gira más rápido que el otro por fricción.
-float Kp = 2.0; 
+float Kp = 2.0;
 float Ki = 0.05;
 float Kd = 0.5;
 
@@ -160,23 +160,21 @@ void loop() {
   } 
   else if (estadoActual == "AVANZANDO") {
     
-    // Aquí entra el PID. Para que la línea recta sea perfecta, 
     // calculamos la compensación.
     unsigned long tiempoActual = millis();
     float dt = (tiempoActual - tiempoAnterior) / 1000.0;
     
-    // (En una versión final con encoders, aquí leeríamos la diferencia entre ruedas)
     // Para esta Beta, simulamos el error. 
-    float errorSimulado = 0; // Si el robot se desvía, esto sería distinto de 0
+    float error = 0; 
     
     // Cálculos PID
-    float P = Kp * errorSimulado;
-    integral += errorSimulado * dt;
+    float P = Kp * error;
+    integral += error * dt;
     float I = Ki * integral;
-    float D = Kd * ((errorSimulado - errorAnterior) / dt);
+    float D = Kd * ((error - errorAnterior) / dt);
     salidaPID = P + I + D;
     
-    errorAnterior = errorSimulado;
+    errorAnterior = error;
     tiempoAnterior = tiempoActual;
 
     // Aplicar la velocidad base dictada por el código del estudiante en la web,

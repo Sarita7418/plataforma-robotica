@@ -2,48 +2,913 @@
 import Layout from '../layouts/Layout.astro';
 import { supabase } from '../lib/supabase.js';
 
-const { data: temas } = await supabase.from('temas').select('*').order('orden', { ascending: true });
-const { data: ejercicios } = await supabase.from('ejercicios').select('*').order('orden', { ascending: true });
----
-<Layout title="Menú Principal">
-  <main class="max-w-6xl mx-auto p-6 mt-8">
-    <header class="mb-10 text-center">
-      <h1 class="text-4xl font-extrabold text-slate-100 mb-4">Lógica de <span class="text-blue-500">Programación</span></h1>
-      <p class="text-lg text-slate-400">Selecciona un módulo para estudiar la teoría y aplicar debugging físico.</p>
-    </header>
+const { data: temas } = await supabase
+  .from('temas')
+  .select('*')
+  .eq('es_creacion_docente', false)
+  .order('orden', { ascending: true });
 
-    <div class="space-y-8">
-      {temas && temas.map((tema) => (
-        <section class="bg-slate-800/50 p-6 sm:p-8 rounded-xl shadow-lg border border-slate-700/50 backdrop-blur-sm">
-          
-          <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 border-b border-slate-700 pb-6">
-            <div>
-              <div class="flex items-center gap-3 mb-2">
-                <span class="bg-blue-500/10 text-blue-400 text-xs font-bold px-3 py-1 rounded border border-blue-500/20">Módulo {tema.orden}</span>
-                <h2 class="text-2xl font-bold text-slate-200">{tema.titulo}</h2>
-              </div>
-              <p class="text-slate-400">{tema.descripcion}</p>
-            </div>
-            
-            <a href={`/teoria/${tema.id}`} class="shrink-0 flex items-center justify-center gap-2 bg-blue-600/10 text-blue-400 hover:bg-blue-600 hover:text-white border border-blue-500/50 px-5 py-3 rounded-lg font-bold transition-all shadow-md group">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 group-hover:animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-              </svg>
-              Aprender Teoría
-            </a>
-          </div>
-          
-          <h3 class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Ejercicios Prácticos:</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {ejercicios && ejercicios.filter(ej => ej.tema_id === tema.id).map((ejercicio) => (
-              <a href={`/ejercicio/${ejercicio.id}`} class="block bg-slate-900/80 p-5 rounded-lg border border-slate-700 hover:border-blue-500 hover:bg-slate-800 transition-all group shadow-md">
-                <h4 class="font-bold text-slate-200 mb-2 group-hover:text-blue-400 transition-colors">{ejercicio.titulo}</h4>
-                <p class="text-sm text-slate-500 line-clamp-2">{ejercicio.mision}</p>
-              </a>
-            ))}
-          </div>
-        </section>
-      ))}
+const { data: temasDocente } = await supabase
+  .from('temas')
+  .select('*')
+  .eq('es_creacion_docente', true)
+  .order('orden', { ascending: true });
+
+const { data: subtemas } = await supabase
+  .from('subtemas')
+  .select('*')
+  .order('orden', { ascending: true });
+
+const { data: ejercicios } = await supabase
+  .from('ejercicios')
+  .select('*')
+  .order('orden', { ascending: true });
+
+const tipoLabels: Record<string, { label: string; color: string; icon: string }> = {
+  completar_espacios: { label: 'Completar',  color: 'blue',   icon: '✏️' },
+  arrastrar_bloques:  { label: 'Arrastrar',  color: 'cyan',   icon: '🧩' },
+  seleccion_multiple: { label: 'Selección',  color: 'purple', icon: '☑️' },
+  ordenar_lineas:     { label: 'Ordenar',    color: 'green',  icon: '↕️' },
+  detectar_bug:       { label: 'Bug Hunt',   color: 'red',    icon: '🐛' },
+};
+---
+
+<Layout title="RoboLearn — Menú Principal">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+  :root {
+    --bg:             #0d1117;
+    --bg-card:        #161b22;
+    --bg-inner:       #0d1117;
+    --border:         rgba(255,255,255,0.07);
+    --border-bright:  rgba(255,255,255,0.13);
+    --blue:           #3b82f6;
+    --blue-light:     #60a5fa;
+    --blue-dim:       rgba(59,130,246,0.12);
+    --cyan:           #22d3ee;
+    --green:          #4ade80;
+    --yellow:         #facc15;
+    --purple:         #a78bfa;
+    --red:            #f87171;
+    --orange:         #fb923c;
+    --text-1:         #f1f5f9;
+    --text-2:         #94a3b8;
+    --text-3:         #64748b;
+    --mono:           'JetBrains Mono', monospace;
+    --sans:           'Inter', sans-serif;
+    --radius:         14px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text-1);
+    font-family: var(--sans);
+    line-height: 1.6;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  /* ── Top Nav ── */
+  .topnav {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(13,17,23,0.85);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+  }
+  .topnav-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    text-decoration: none;
+  }
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: var(--blue);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem;
+    box-shadow: 0 0 16px rgba(59,130,246,0.35);
+    flex-shrink: 0;
+  }
+  .logo-name {
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: 1.1rem;
+    letter-spacing: -0.03em;
+    color: var(--text-1);
+  }
+  .logo-name span { color: var(--blue-light); }
+
+  .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.45rem 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-bright);
+    color: var(--text-2);
+    background: rgba(255,255,255,0.03);
+    text-decoration: none;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+  .nav-btn:hover {
+    background: rgba(255,255,255,0.07);
+    color: var(--text-1);
+  }
+  .nav-btn.primary {
+    background: var(--blue-dim);
+    border-color: rgba(59,130,246,0.35);
+    color: var(--blue-light);
+  }
+  .nav-btn.primary:hover {
+    background: rgba(59,130,246,0.22);
+    border-color: var(--blue);
+  }
+
+  /* Avatar / perfil */
+  .profile-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.35rem 0.9rem 0.35rem 0.4rem;
+    border: 1px solid var(--border-bright);
+    border-radius: 100px;
+    background: rgba(255,255,255,0.03);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .profile-btn:hover {
+    background: rgba(255,255,255,0.07);
+    border-color: rgba(255,255,255,0.2);
+  }
+  .profile-avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--blue), var(--cyan));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; font-weight: 700; color: white;
+    flex-shrink: 0;
+  }
+  .profile-name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-1);
+  }
+  .profile-role {
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    color: var(--text-3);
+    display: block;
+    line-height: 1;
+  }
+  .profile-info { line-height: 1.2; }
+
+  /* ── Hero ── */
+  .hero {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 3.5rem 1.5rem 2.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+  .hero::after {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 400px; height: 300px;
+    background: radial-gradient(ellipse at top right, rgba(59,130,246,0.06), transparent 65%);
+    pointer-events: none;
+  }
+  .hero-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--blue);
+    background: rgba(59,130,246,0.1);
+    border: 1px solid rgba(59,130,246,0.25);
+    padding: 0.3rem 0.9rem;
+    border-radius: 100px;
+  }
+  .hero-eyebrow::before {
+    content: '';
+    width: 6px; height: 6px;
+    background: var(--blue);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50%      { opacity:0.4; transform:scale(0.75); }
+  }
+  .hero-title {
+    font-size: clamp(1.8rem, 4vw, 2.8rem);
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    line-height: 1.1;
+    color: var(--text-1);
+  }
+  .hero-title span {
+    background: linear-gradient(135deg, var(--blue-light), var(--cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero-sub {
+    font-size: 0.97rem;
+    color: var(--text-2);
+    max-width: 560px;
+    font-weight: 400;
+    line-height: 1.75;
+  }
+  .hero-stats {
+    display: flex;
+    gap: 2rem;
+    margin-top: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--text-1);
+  }
+  .stat-label {
+    font-size: 0.75rem;
+    color: var(--text-3);
+    letter-spacing: 0.04em;
+  }
+
+  /* ── Layout ── */
+  .page-body {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3rem;
+  }
+
+  /* ── Section labels ── */
+  .section-label {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .section-label-text {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    white-space: nowrap;
+  }
+  .section-label-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  .section-label-badge {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    padding: 0.15rem 0.6rem;
+    border-radius: 100px;
+    border: 1px solid var(--border-bright);
+    color: var(--text-3);
+    white-space: nowrap;
+  }
+
+  /* ── Módulo card ── */
+  .modulo-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+    transition: border-color 0.25s;
+    position: relative;
+  }
+  .modulo-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+  }
+  .modulo-card:hover { border-color: var(--border-bright); }
+  .modulo-card.accent-blue   { border-left: 3px solid var(--blue); }
+  .modulo-card.accent-cyan   { border-left: 3px solid var(--cyan); }
+  .modulo-card.accent-green  { border-left: 3px solid var(--green); }
+  .modulo-card.accent-yellow { border-left: 3px solid var(--yellow); }
+  .modulo-card.accent-purple { border-left: 3px solid var(--purple); }
+  .modulo-card.accent-orange { border-left: 3px solid var(--orange); }
+
+  .modulo-header {
+    padding: 1.5rem 1.75rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+  }
+  @media (min-width: 720px) {
+    .modulo-header {
+      flex-direction: row;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+  }
+
+  .modulo-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin-bottom: 0.4rem;
+    flex-wrap: wrap;
+  }
+  .modulo-num {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--blue);
+    background: rgba(59,130,246,0.1);
+    border: 1px solid rgba(59,130,246,0.2);
+    padding: 0.2rem 0.65rem;
+    border-radius: 100px;
+  }
+  .modulo-ejercicios-count {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--text-3);
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    padding: 0.2rem 0.65rem;
+    border-radius: 100px;
+  }
+  .modulo-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-1);
+  }
+  .modulo-desc {
+    font-size: 0.875rem;
+    color: var(--text-2);
+    line-height: 1.7;
+    margin-top: 0.25rem;
+    max-width: 520px;
+  }
+
+  .teoria-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--blue-light);
+    background: var(--blue-dim);
+    border: 1px solid rgba(59,130,246,0.3);
+    padding: 0.6rem 1.25rem;
+    border-radius: 9px;
+    text-decoration: none;
+    transition: all 0.2s;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .teoria-btn:hover {
+    background: rgba(59,130,246,0.2);
+    border-color: var(--blue);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(59,130,246,0.2);
+  }
+  .teoria-btn svg { width: 15px; height: 15px; }
+
+  /* ── Exercises area ── */
+  .ejercicios-area {
+    padding: 0 1.75rem 1.5rem;
+  }
+  .ejercicios-label {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-bottom: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .ejercicios-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .ejercicios-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+  }
+  @media (min-width: 600px)  { .ejercicios-grid { grid-template-columns: repeat(2,1fr); } }
+  @media (min-width: 900px)  { .ejercicios-grid { grid-template-columns: repeat(3,1fr); } }
+
+  /* ── Exercise card ── */
+  .ej-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    background: var(--bg-inner);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+    text-decoration: none;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .ej-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    background: var(--blue);
+  }
+  .ej-card:hover {
+    border-color: rgba(59,130,246,0.4);
+    background: rgba(59,130,246,0.04);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  }
+  .ej-card:hover::after { opacity: 1; }
+
+  .ej-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .ej-tipo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    padding: 0.18rem 0.55rem;
+    border-radius: 5px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .tipo-blue   { background: rgba(59,130,246,0.12);  color: var(--blue-light); border: 1px solid rgba(59,130,246,0.2); }
+  .tipo-cyan   { background: rgba(34,211,238,0.1);   color: var(--cyan);       border: 1px solid rgba(34,211,238,0.2); }
+  .tipo-purple { background: rgba(167,139,250,0.1);  color: var(--purple);     border: 1px solid rgba(167,139,250,0.2); }
+  .tipo-green  { background: rgba(74,222,128,0.1);   color: var(--green);      border: 1px solid rgba(74,222,128,0.2); }
+  .tipo-red    { background: rgba(248,113,113,0.1);  color: var(--red);        border: 1px solid rgba(248,113,113,0.2); }
+
+  .ej-arrow {
+    color: var(--text-3);
+    transition: all 0.2s;
+    flex-shrink: 0;
+    margin-top: 1px;
+    font-size: 0.8rem;
+  }
+  .ej-card:hover .ej-arrow { color: var(--blue-light); transform: translateX(3px); }
+
+  .ej-title {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text-1);
+    line-height: 1.4;
+    transition: color 0.2s;
+  }
+  .ej-card:hover .ej-title { color: var(--blue-light); }
+
+  .ej-subtema {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--text-3);
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .ej-subtema-dot {
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--text-3);
+    flex-shrink: 0;
+  }
+
+  .ej-mision {
+    font-size: 0.8rem;
+    color: var(--text-2);
+    line-height: 1.55;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Empty state */
+  .empty-state {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2.5rem;
+    background: rgba(0,0,0,0.2);
+    border: 1px dashed var(--border-bright);
+    border-radius: 10px;
+    text-align: center;
+    gap: 0.5rem;
+  }
+  .empty-state-icon { font-size: 1.75rem; }
+  .empty-state-text { font-size: 0.85rem; color: var(--text-3); }
+
+  /* ── Docente section ── */
+  .docente-banner {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem 1.75rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .docente-banner::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(167,139,250,0.2), transparent);
+  }
+  @media (min-width: 680px) {
+    .docente-banner { flex-direction: row; align-items: center; justify-content: space-between; }
+  }
+  .docente-info { flex: 1; }
+  .docente-tag {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--purple);
+    background: rgba(167,139,250,0.1);
+    border: 1px solid rgba(167,139,250,0.2);
+    padding: 0.2rem 0.65rem;
+    border-radius: 100px;
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+  .docente-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-1);
+    margin-bottom: 0.3rem;
+  }
+  .docente-desc {
+    font-size: 0.84rem;
+    color: var(--text-2);
+    line-height: 1.65;
+  }
+  .docente-actions { display: flex; gap: 0.65rem; flex-wrap: wrap; flex-shrink: 0; }
+  .docente-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--mono);
+    font-size: 0.76rem;
+    font-weight: 600;
+    padding: 0.55rem 1.15rem;
+    border-radius: 8px;
+    border: 1px solid rgba(167,139,250,0.3);
+    color: var(--purple);
+    background: rgba(167,139,250,0.08);
+    text-decoration: none;
+    cursor: not-allowed;
+    opacity: 0.75;
+    transition: all 0.2s;
+  }
+
+  /* ── Módulos de docente (when they exist) ── */
+  .docente-modulos-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+  @media (min-width: 640px) { .docente-modulos-grid { grid-template-columns: repeat(2,1fr); } }
+  @media (min-width: 960px) { .docente-modulos-grid { grid-template-columns: repeat(3,1fr); } }
+
+  .docente-tema-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--purple);
+    border-radius: 10px;
+    padding: 1.1rem 1.25rem;
+    text-decoration: none;
+    transition: all 0.2s;
+    display: block;
+  }
+  .docente-tema-card:hover {
+    border-color: rgba(167,139,250,0.45);
+    transform: translateY(-2px);
+  }
+  .docente-tema-num {
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--purple);
+    margin-bottom: 0.35rem;
+  }
+  .docente-tema-title { font-size: 0.92rem; font-weight: 600; color: var(--text-1); margin-bottom: 0.25rem; }
+  .docente-tema-desc  { font-size: 0.8rem; color: var(--text-2); line-height: 1.55; }
+  .docente-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 2rem;
+    background: rgba(0,0,0,0.15);
+    border: 1px dashed rgba(167,139,250,0.2);
+    border-radius: 12px;
+    text-align: center;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+  }
+  .docente-empty-icon { font-size: 2rem; }
+  .docente-empty-text { font-size: 0.85rem; color: var(--text-3); line-height: 1.65; max-width: 320px; }
+
+  /* ── Responsive nav ── */
+  @media (max-width: 540px) {
+    .nav-btn span { display: none; }
+    .profile-role { display: none; }
+  }
+</style>
+
+<!-- ═══════════════ TOP NAV ═══════════════ -->
+<nav class="topnav">
+  <div class="topnav-inner">
+    <a href="/" class="logo">
+      <div class="logo-icon">🤖</div>
+      <span class="logo-name">Robo<span>Learn</span></span>
+    </a>
+
+    <div class="nav-right">
+      <!-- Botón Gestión Docente — sin funcionalidad aún -->
+      <a
+        href="#"
+        onclick="return false;"
+        class="nav-btn primary"
+        title="Próximamente: Panel de gestión para docentes"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+        </svg>
+        <span>Gestión Docente</span>
+      </a>
+
+      <!-- Perfil — placeholder -->
+      <div class="profile-btn" title="Gestión de cuenta (próximamente)">
+        <div class="profile-avatar">A</div>
+        <div class="profile-info">
+          <div class="profile-name">Administrador</div>
+          <span class="profile-role">admin</span>
+        </div>
+      </div>
     </div>
-  </main>
+  </div>
+</nav>
+
+<!-- ═══════════════ HERO ═══════════════ -->
+<div class="hero">
+  <div class="hero-eyebrow">Plataforma de Aprendizaje</div>
+  <h1 class="hero-title">Lógica de <span>Programación</span><br>para Robótica</h1>
+  <p class="hero-sub">
+    Estudia la teoría, depura código real y programa tu robot. Cada módulo combina
+    explicación conceptual con ejercicios interactivos diseñados para aprender haciendo.
+  </p>
+  <div class="hero-stats">
+    <div class="stat">
+      <span class="stat-value">{temas?.length ?? 0}</span>
+      <span class="stat-label">Módulos</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value">{ejercicios?.length ?? 0}</span>
+      <span class="stat-label">Ejercicios</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value">5</span>
+      <span class="stat-label">Tipos de reto</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE BODY ═══════════════ -->
+<div class="page-body">
+
+  <!-- ══ MÓDULOS PREDETERMINADOS ══ -->
+  <section>
+    <div class="section-label">
+      <span class="section-label-text">Módulos del curso</span>
+      <div class="section-label-line"></div>
+      <span class="section-label-badge">{temas?.length ?? 0} disponibles</span>
+    </div>
+
+    {temas && temas.length > 0 ? (
+      temas.map((tema, idx) => {
+        const accentColors = ['accent-blue','accent-cyan','accent-green','accent-yellow','accent-purple','accent-orange'];
+        const accent = accentColors[idx % accentColors.length];
+        const ejsTema = ejercicios?.filter(e => e.subtema_id
+          ? subtemas?.find(s => s.id === e.subtema_id)?.tema_id === tema.id
+          : false
+        ) ?? [];
+        // fallback: también ejercicios que tengan tema_id directo (por si acaso)
+        const ejsTotal = ejercicios?.filter(e => {
+          const sub = subtemas?.find(s => s.id === e.subtema_id);
+          return sub ? sub.tema_id === tema.id : false;
+        }) ?? [];
+
+        return (
+          <div class={`modulo-card ${accent}`}>
+            <div class="modulo-header">
+              <div>
+                <div class="modulo-meta">
+                  <span class="modulo-num">Módulo {tema.orden}</span>
+                  <span class="modulo-ejercicios-count">
+                    {ejsTotal.length} ejercicio{ejsTotal.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <h2 class="modulo-title">{tema.titulo}</h2>
+                {tema.descripcion && (
+                  <p class="modulo-desc">{tema.descripcion}</p>
+                )}
+              </div>
+              <a href={`/teoria/${tema.id}`} class="teoria-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                </svg>
+                Ver Teoría
+              </a>
+            </div>
+
+            <div class="ejercicios-area">
+              <div class="ejercicios-label">Ejercicios prácticos</div>
+              <div class="ejercicios-grid">
+                {ejsTotal.length > 0 ? (
+                  ejsTotal.map((ej) => {
+                    const tipoInfo = tipoLabels[ej.tipo_ejercicio] ?? { label: ej.tipo_ejercicio, color: 'blue', icon: '📝' };
+                    const subtema = subtemas?.find(s => s.id === ej.subtema_id);
+                    return (
+                      <a href={`/ejercicio/${ej.id}`} class="ej-card">
+                        <div class="ej-top">
+                          <span class={`ej-tipo tipo-${tipoInfo.color}`}>
+                            {tipoInfo.icon}&nbsp;{tipoInfo.label}
+                          </span>
+                          <span class="ej-arrow">›</span>
+                        </div>
+                        <div class="ej-title">{ej.titulo}</div>
+                        {subtema && (
+                          <div class="ej-subtema">
+                            <span class="ej-subtema-dot"></span>
+                            {subtema.titulo}
+                          </div>
+                        )}
+                        {ej.mision && (
+                          <div class="ej-mision">{ej.mision}</div>
+                        )}
+                      </a>
+                    );
+                  })
+                ) : (
+                  <div class="empty-state">
+                    <span class="empty-state-icon">📭</span>
+                    <span class="empty-state-text">Sin ejercicios en este módulo todavía.</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })
+    ) : (
+      <div class="empty-state" style="padding: 4rem 2rem;">
+        <span class="empty-state-icon">📚</span>
+        <span class="empty-state-text">No hay módulos disponibles aún. El equipo de desarrollo los está preparando.</span>
+      </div>
+    )}
+  </section>
+
+
+  <!-- ══ ZONA DOCENTE ══ -->
+  <section>
+    <div class="section-label">
+      <span class="section-label-text">Contenido personalizado</span>
+      <div class="section-label-line"></div>
+      <span class="section-label-badge">Docentes</span>
+    </div>
+
+    <!-- Banner CTA -->
+    <div class="docente-banner">
+      <div class="docente-info">
+        <span class="docente-tag">⚙️ Panel Docente</span>
+        <div class="docente-title">Crea tus propios módulos y ejercicios</div>
+        <p class="docente-desc">
+          Como docente puedes añadir temas, subtemas y ejercicios personalizados de cualquier
+          tipo para complementar el contenido del curso con tus propias actividades.
+        </p>
+      </div>
+      <div class="docente-actions">
+        <span
+          class="docente-btn"
+          title="Panel de gestión próximamente disponible"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+          </svg>
+          Nuevo módulo
+        </span>
+        <span
+          class="docente-btn"
+          title="Panel de gestión próximamente disponible"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+          </svg>
+          Nuevo ejercicio
+        </span>
+      </div>
+    </div>
+
+    <!-- Módulos del docente -->
+    {temasDocente && temasDocente.length > 0 ? (
+      <div class="docente-modulos-grid">
+        {temasDocente.map((tema) => (
+          <a href={`/teoria/${tema.id}`} class="docente-tema-card">
+            <div class="docente-tema-num">Módulo personalizado · {tema.orden}</div>
+            <div class="docente-tema-title">{tema.titulo}</div>
+            {tema.descripcion && (
+              <div class="docente-tema-desc">{tema.descripcion}</div>
+            )}
+          </a>
+        ))}
+      </div>
+    ) : (
+      <div class="docente-empty">
+        <span class="docente-empty-icon">✏️</span>
+        <p class="docente-empty-text">
+          Todavía no hay módulos personalizados. Cuando un docente cree contenido propio
+          aparecerá listado aquí.
+        </p>
+      </div>
+    )}
+  </section>
+
+</div>
+
 </Layout>

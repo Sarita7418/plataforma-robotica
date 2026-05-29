@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase.js';
 
 export async function getStaticPaths() {
   const { data: ejercicios } = await supabase.from('ejercicios').select('id');
-  return ejercicios.map((ej) => ({
+  return (ejercicios ?? []).map((ej) => ({
     params: { id: ej.id.toString() },
   }));
 }
@@ -13,73 +13,881 @@ const { id } = Astro.params;
 
 const { data: ejercicio } = await supabase
   .from('ejercicios')
-  .select('*, temas(titulo)')
+  .select(`*, subtemas(id, titulo, orden, temas(id, titulo, orden))`)
   .eq('id', id)
   .single();
 
-// Input modificado para encajar en el tema oscuro (más sutil)
-const inputHTML = `<input type="number" id="valorInput" class="bg-slate-950 text-blue-400 font-bold w-16 px-2 py-0.5 border-b-2 border-slate-600 outline-none focus:border-blue-500 transition-colors mx-1 text-center" value="255" />`;
-const codigoRenderizado = ejercicio.codigo_inicial.replace('___INPUT___', inputHTML);
+if (!ejercicio) return Astro.redirect('/');
+
+const cfg     = ejercicio.configuracion_ui ?? {};
+const tipo    = ejercicio.tipo_ejercicio;
+const tipoStr = tipo;
+const subtema = ejercicio.subtemas;
+const tema    = subtema?.temas;
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function esc(s: string): string {
+  return s
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Colorea sintaxis sobre texto YA escapado
+function syn(s: string): string {
+  return s
+    .replace(/\b(int|float|double|char|bool|void|const|auto|String|byte|short|long|unsigned|return|if|else|while|for|constexpr|static_cast|uint8_t|int16_t|uint32_t)\b/g,'<span class="sk">$1</span>')
+    .replace(/\b(true|false|nullptr|NULL)\b/g,'<span class="sl">$1</span>')
+    .replace(/(\/\/[^\n]*)/g,'<span class="sc">$1</span>')
+    .replace(/(&quot;[^&]*&quot;)/g,'<span class="ss">$1</span>')
+    .replace(/\b(\d+\.?\d*f?)\b/g,'<span class="sn">$1</span>');
+}
+
+// ── COMPLETAR ESPACIOS ─────────────────────────────────────────────────────────
+// Divide por ___INPUT___, colorea cada parte por separado, inserta el input real en medio
+function buildCompletarHTML(codigo: string): string {
+  const INPUT_TAG = `<input id="inp-completar" type="text" autocomplete="off" spellcheck="false" placeholder="???" class="inline-input" />`;
+  return codigo.split('\n').map(linea => {
+    if (linea.includes('___INPUT___')) {
+      const partes = linea.split('___INPUT___');
+      const html = partes.map((p, i) =>
+        syn(esc(p)) + (i < partes.length - 1 ? INPUT_TAG : '')
+      ).join('');
+      return `<div class="code-line">${html}</div>`;
+    }
+    return `<div class="code-line">${syn(esc(linea))}</div>`;
+  }).join('');
+}
+
+// ── ARRASTRAR BLOQUES ──────────────────────────────────────────────────────────
+// Divide cada línea por los tokens ___DROP_N___, inserta drop-zones reales
+function buildArrastrarHTML(codigo: string): string {
+  return codigo.split('\n').map(linea => {
+    // encontrar todos los tokens DROP en esta línea
+    const TOKEN = /___DROP_(\d+)___/g;
+    let match;
+    let lastIdx = 0;
+    let parts = '';
+    let found = false;
+    TOKEN.lastIndex = 0;
+    while ((match = TOKEN.exec(linea)) !== null) {
+      found = true;
+      const before = linea.slice(lastIdx, match.index);
+      const dropN  = match[1];
+      if (before) parts += syn(esc(before));
+      parts += `<span class="drop-zone" data-drop="${dropN}">arrastra aquí</span>`;
+      lastIdx = TOKEN.lastIndex;
+    }
+    if (found) {
+      const after = linea.slice(lastIdx);
+      if (after) parts += syn(esc(after));
+      return `<div class="code-line">${parts}</div>`;
+    }
+    return `<div class="code-line">${syn(esc(linea))}</div>`;
+  }).join('');
+}
+
+// ── SELECCIÓN MÚLTIPLE ─────────────────────────────────────────────────────────
+function buildSeleccionHTML(codigo: string): string {
+  const SELECT_TAG = `<span class="select-placeholder" id="select-chosen">▼ elegir</span>`;
+  return codigo.split('\n').map(linea => {
+    if (linea.includes('___SELECT___')) {
+      const partes = linea.split('___SELECT___');
+      const html = partes.map((p, i) =>
+        syn(esc(p)) + (i < partes.length - 1 ? SELECT_TAG : '')
+      ).join('');
+      return `<div class="code-line">${html}</div>`;
+    }
+    return `<div class="code-line">${syn(esc(linea))}</div>`;
+  }).join('');
+}
+
+// ── Meta de tipos ──────────────────────────────────────────────────────────────
+const tipoMeta: Record<string, { label: string; icon: string; color: string; desc: string }> = {
+  completar_espacios: { label:'Completar espacios', icon:'✏️', color:'blue',   desc:'Escribe el valor exacto que completa el código. Respeta mayúsculas y espacios.' },
+  arrastrar_bloques:  { label:'Arrastrar bloques',  icon:'🧩', color:'cyan',   desc:'Arrastra cada bloque desde la paleta inferior hasta la zona punteada que le corresponde en el código.' },
+  seleccion_multiple: { label:'Selección múltiple', icon:'☑️', color:'purple', desc:'Haz clic en la opción correcta de la lista inferior. Aparecerá en el hueco del código.' },
+  ordenar_lineas:     { label:'Ordenar líneas',     icon:'↕️', color:'green',  desc:'Arrastra las líneas hacia arriba o abajo hasta que el flujo lógico del programa sea correcto.' },
+  detectar_bug:       { label:'Caza de Bugs',       icon:'🐛', color:'red',    desc:'Lee el código con atención. Haz clic en la línea exacta que contiene el error lógico.' },
+};
+const meta = tipoMeta[tipo] ?? { label: tipo, icon:'📝', color:'blue', desc:'' };
+
+const cfgJSON = JSON.stringify(cfg);
 ---
 
-<Layout title={`Ejercicio: ${ejercicio.titulo}`}>
-  <main class="max-w-4xl mx-auto p-6 mt-6">
-    <div class="flex justify-between items-end mb-6">
+<Layout title={`${ejercicio.titulo} — RoboLearn`}>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+  :root {
+    --bg:       #0d1117;
+    --card:     #161b22;
+    --inner:    #0b0f17;
+    --b0:       rgba(255,255,255,0.07);
+    --b1:       rgba(255,255,255,0.13);
+    --blue:     #3b82f6;
+    --blue-l:   #60a5fa;
+    --blue-d:   rgba(59,130,246,0.12);
+    --cyan:     #22d3ee;
+    --green:    #4ade80;
+    --yellow:   #facc15;
+    --purple:   #a78bfa;
+    --red:      #f87171;
+    --t1:       #f1f5f9;
+    --t2:       #94a3b8;
+    --t3:       #64748b;
+    --mono:     'JetBrains Mono', monospace;
+    --sans:     'Inter', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--t1); font-family:var(--sans); line-height:1.6; min-height:100vh; overflow-x:hidden; }
+
+  /* ── Nav ── */
+  .topnav {
+    position:sticky; top:0; z-index:50;
+    background:rgba(13,17,23,0.92); backdrop-filter:blur(16px);
+    border-bottom:1px solid var(--b0);
+  }
+  .topnav-inner {
+    max-width:1100px; margin:0 auto; padding:0 1.5rem; height:56px;
+    display:flex; align-items:center; justify-content:space-between; gap:1rem;
+  }
+  .logo { display:flex; align-items:center; gap:0.6rem; text-decoration:none; }
+  .logo-icon {
+    width:30px; height:30px; background:var(--blue); border-radius:7px;
+    display:flex; align-items:center; justify-content:center; font-size:0.95rem;
+    box-shadow:0 0 14px rgba(59,130,246,0.35); flex-shrink:0;
+  }
+  .logo-name { font-weight:800; font-size:1.05rem; letter-spacing:-0.03em; color:var(--t1); }
+  .logo-name span { color:var(--blue-l); }
+  .breadcrumb {
+    display:flex; align-items:center; gap:0.4rem;
+    font-family:var(--mono); font-size:0.7rem; color:var(--t3); overflow:hidden;
+  }
+  .breadcrumb a { color:var(--t3); text-decoration:none; transition:color .2s; white-space:nowrap; }
+  .breadcrumb a:hover { color:var(--blue-l); }
+  .bc-sep { color:var(--t3); opacity:0.4; }
+  .bc-cur { color:var(--t2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px; }
+
+  /* ── Page grid ── */
+  .page-grid {
+    max-width:1100px; margin:0 auto; padding:1.75rem 1.5rem 5rem;
+    display:grid; grid-template-columns:1fr; gap:1.25rem;
+  }
+  @media (min-width:900px) {
+    .page-grid { grid-template-columns:1fr 330px; align-items:start; }
+    .ex-header  { grid-column:1 / -1; }
+  }
+
+  /* ── Header ejercicio ── */
+  .ex-header {
+    background:var(--card); border:1px solid var(--b0); border-radius:14px;
+    padding:1.6rem 1.9rem; position:relative; overflow:hidden;
+  }
+  .ex-header::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:1px;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,0.07),transparent);
+  }
+  .ex-badges { display:flex; align-items:center; gap:0.45rem; flex-wrap:wrap; margin-bottom:0.55rem; }
+  .badge {
+    font-family:var(--mono); font-size:0.63rem; font-weight:600;
+    letter-spacing:0.07em; padding:0.2rem 0.6rem; border-radius:100px;
+  }
+  .badge-mod    { color:var(--blue-l); background:rgba(59,130,246,0.1);  border:1px solid rgba(59,130,246,0.22); }
+  .badge-sub    { color:var(--t3);     background:rgba(255,255,255,0.04); border:1px solid var(--b1); }
+  .badge-blue   { color:var(--blue-l); background:rgba(59,130,246,0.1);  border:1px solid rgba(59,130,246,0.25); }
+  .badge-cyan   { color:var(--cyan);   background:rgba(34,211,238,0.08); border:1px solid rgba(34,211,238,0.22); }
+  .badge-green  { color:var(--green);  background:rgba(74,222,128,0.08); border:1px solid rgba(74,222,128,0.22); }
+  .badge-purple { color:var(--purple); background:rgba(167,139,250,0.08);border:1px solid rgba(167,139,250,0.22); }
+  .badge-red    { color:var(--red);    background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.22); }
+
+  .ex-title { font-size:clamp(1.4rem,3vw,2rem); font-weight:800; letter-spacing:-0.03em; color:var(--t1); line-height:1.15; }
+  .ex-mision {
+    display:flex; gap:0.8rem; align-items:flex-start;
+    background:rgba(59,130,246,0.05); border:1px solid rgba(59,130,246,0.17);
+    border-left:3px solid var(--blue); border-radius:0 10px 10px 0;
+    padding:0.9rem 1.1rem; margin-top:1rem;
+  }
+  .ex-mision-icon { font-size:1rem; flex-shrink:0; margin-top:2px; }
+  .mision-label {
+    font-family:var(--mono); font-size:0.6rem; letter-spacing:0.12em;
+    text-transform:uppercase; color:var(--blue-l); margin-bottom:0.25rem;
+  }
+  .mision-text { font-size:0.9rem; color:var(--t2); line-height:1.7; }
+
+  /* ── Panel genérico ── */
+  .panel {
+    background:var(--card); border:1px solid var(--b0); border-radius:14px;
+    overflow:hidden;
+  }
+  .panel-hdr {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0.55rem 1rem; background:rgba(255,255,255,0.022);
+    border-bottom:1px solid var(--b0);
+  }
+  .panel-lang {
+    font-family:var(--mono); font-size:0.66rem;
+    letter-spacing:0.1em; text-transform:uppercase; color:var(--t3);
+  }
+  .dots { display:flex; gap:5px; }
+  .dot  { width:8px; height:8px; border-radius:50%; }
+  .dr{background:#ef4444;} .dy{background:#f59e0b;} .dg{background:#22c55e;}
+
+  /* ── Cuerpo de código ── */
+  .code-body {
+    padding:1.2rem 1.35rem; font-family:var(--mono); font-size:0.85rem;
+    line-height:1.9; overflow-x:auto; min-height:100px;
+    counter-reset:ln;
+  }
+  .code-line {
+    display:block; white-space:pre; counter-increment:ln;
+    padding-left:3rem; position:relative;
+  }
+  .code-line::before {
+    content:counter(ln); position:absolute; left:0; width:2.3rem;
+    text-align:right; color:var(--t3); font-size:0.73rem;
+    padding-right:0.65rem; user-select:none; line-height:1.9;
+  }
+  /* Syntax tokens */
+  .sk{color:#c084fc;} .sl{color:#86efac;} .sc{color:#475569;} .ss{color:#fde68a;} .sn{color:#86efac;}
+
+  /* ── Input inline (completar) ── */
+  .inline-input {
+    display:inline-block;
+    background:rgba(59,130,246,0.1);
+    border:none; border-bottom:2px solid rgba(59,130,246,0.5);
+    color:var(--blue-l); font-family:var(--mono); font-size:0.85rem;
+    width:110px; padding:0 0.3rem 0.1rem;
+    outline:none; text-align:center;
+    transition:border-color .2s, background .2s;
+    border-radius:3px 3px 0 0; vertical-align:baseline;
+  }
+  .inline-input:focus { border-bottom-color:var(--blue); background:rgba(59,130,246,0.18); }
+  .inline-input.ok  { border-bottom-color:var(--green); color:var(--green); }
+  .inline-input.err { border-bottom-color:var(--red);   color:var(--red);   }
+
+  /* ── Drop zones (arrastrar) ── */
+  .drop-zone {
+    display:inline-block; min-width:80px; padding:0.05rem 0.55rem;
+    background:rgba(34,211,238,0.06); border:1.5px dashed rgba(34,211,238,0.3);
+    border-radius:5px; color:var(--t3); font-size:0.78rem; font-style:italic;
+    transition:all .18s; vertical-align:baseline; cursor:default;
+  }
+  .drop-zone.over   { background:rgba(34,211,238,0.18); border-color:var(--cyan); color:var(--cyan); }
+  .drop-zone.filled { background:rgba(34,211,238,0.1);  border-style:solid; border-color:rgba(34,211,238,0.4); color:var(--cyan); font-style:normal; }
+  .drop-zone.ok     { background:rgba(74,222,128,0.1);  border-color:var(--green); color:var(--green); }
+  .drop-zone.err    { background:rgba(248,113,113,0.1); border-color:var(--red);   color:var(--red); }
+
+  /* Paleta de bloques */
+  .blocks-palette {
+    display:flex; flex-wrap:wrap; gap:0.5rem;
+    padding:0.9rem 1.1rem; border-top:1px solid var(--b0);
+    background:rgba(0,0,0,0.15);
+  }
+  .chip {
+    font-family:var(--mono); font-size:0.8rem; font-weight:600;
+    color:var(--cyan); background:rgba(34,211,238,0.08);
+    border:1px solid rgba(34,211,238,0.25); border-radius:7px;
+    padding:0.32rem 0.8rem; cursor:grab; user-select:none; transition:all .18s;
+  }
+  .chip:hover  { background:rgba(34,211,238,0.18); transform:translateY(-1px); }
+  .chip.used   { opacity:0.25; pointer-events:none; }
+
+  /* ── Select placeholder ── */
+  .select-placeholder {
+    display:inline-block; background:rgba(167,139,250,0.1);
+    border:1.5px dashed rgba(167,139,250,0.4); border-radius:5px;
+    padding:0.05rem 0.65rem; color:var(--purple); font-size:0.8rem;
+    cursor:pointer; transition:all .2s; vertical-align:baseline;
+  }
+  .select-placeholder:hover { background:rgba(167,139,250,0.18); }
+  .select-placeholder.ok  { background:rgba(74,222,128,0.1);  border-color:var(--green); color:var(--green); border-style:solid; }
+  .select-placeholder.err { background:rgba(248,113,113,0.1); border-color:var(--red);   color:var(--red);   border-style:solid; }
+
+  .opciones-row {
+    display:flex; flex-wrap:wrap; gap:0.55rem;
+    padding:0.9rem 1.1rem; border-top:1px solid var(--b0);
+    background:rgba(0,0,0,0.15);
+  }
+  .opcion {
+    font-family:var(--mono); font-size:0.8rem; font-weight:600;
+    color:var(--purple); background:rgba(167,139,250,0.08);
+    border:1px solid rgba(167,139,250,0.25); border-radius:8px;
+    padding:0.4rem 1rem; cursor:pointer; transition:all .2s;
+  }
+  .opcion:hover    { background:rgba(167,139,250,0.18); transform:translateY(-1px); }
+  .opcion.selected { background:rgba(167,139,250,0.2);  border-color:var(--purple); }
+  .opcion.ok       { background:rgba(74,222,128,0.12);  border-color:var(--green);  color:var(--green); }
+  .opcion.err      { background:rgba(248,113,113,0.1);  border-color:var(--red);    color:var(--red); }
+
+  /* ── Ordenar líneas ── */
+  .sort-list { padding:0.9rem 1.1rem; display:flex; flex-direction:column; gap:0.4rem; }
+  .sort-item {
+    display:flex; align-items:center; gap:0.6rem;
+    background:rgba(74,222,128,0.05); border:1px solid rgba(74,222,128,0.18);
+    border-radius:8px; padding:0.55rem 0.85rem;
+    cursor:grab; user-select:none; transition:all .18s;
+  }
+  .sort-item:hover     { background:rgba(74,222,128,0.1); border-color:rgba(74,222,128,0.35); }
+  .sort-item.dragging  { opacity:0.35; transform:scale(0.98); }
+  .sort-item.dt        { border-top:2px solid var(--green); }
+  .sort-item.db        { border-bottom:2px solid var(--green); }
+  .sort-handle         { color:var(--t3); font-size:0.9rem; flex-shrink:0; }
+  .sort-code           { font-family:var(--mono); font-size:0.81rem; color:var(--t2); flex:1; }
+  .sort-item.ok        { background:rgba(74,222,128,0.1); border-color:rgba(74,222,128,0.5); }
+  .sort-item.err       { background:rgba(248,113,113,0.08); border-color:rgba(248,113,113,0.4); }
+
+  /* ── Detectar bug ── */
+  .bug-list   { padding:0.65rem 0.85rem; display:flex; flex-direction:column; gap:0.22rem; }
+  .bug-line   {
+    display:flex; align-items:stretch; border-radius:7px;
+    cursor:pointer; transition:all .18s; border:1px solid transparent;
+  }
+  .bug-line:hover { background:rgba(248,113,113,0.06); border-color:rgba(248,113,113,0.2); }
+  .bug-num   {
+    font-family:var(--mono); font-size:0.73rem; color:var(--t3);
+    min-width:2.4rem; text-align:right; padding:0.48rem 0.7rem 0.48rem 0.4rem;
+    user-select:none; flex-shrink:0;
+  }
+  .bug-code  {
+    font-family:var(--mono); font-size:0.83rem; color:var(--t2);
+    padding:0.48rem 0.65rem 0.48rem 0; line-height:1.7; flex:1; white-space:pre;
+  }
+  .bug-line.hi  { background:rgba(248,113,113,0.09); border-color:rgba(248,113,113,0.38); }
+  .bug-line.ok  { background:rgba(74,222,128,0.08);  border-color:rgba(74,222,128,0.45); }
+  .bug-line.err { background:rgba(248,113,113,0.12); border-color:var(--red); }
+
+  /* ── Sidebar ── */
+  .side-panel { display:flex; flex-direction:column; gap:1.1rem; }
+
+  .sc-panel {
+    background:var(--card); border:1px solid var(--b0); border-radius:12px; overflow:hidden;
+  }
+  .sc-hdr {
+    padding:0.7rem 1rem; background:rgba(255,255,255,0.022);
+    border-bottom:1px solid var(--b0);
+    display:flex; align-items:center; gap:0.45rem;
+  }
+  .sc-title { font-family:var(--mono); font-size:0.68rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--t3); }
+  .sc-body  { padding:1rem 1.1rem; }
+
+  /* Navegación — ahora en el top del sidebar */
+  .nav-links { display:flex; gap:0.55rem; }
+  .nav-links a {
+    flex:1; text-align:center;
+    font-family:var(--mono); font-size:0.74rem; font-weight:600;
+    color:var(--t2); background:rgba(255,255,255,0.03);
+    border:1px solid var(--b1); border-radius:8px;
+    padding:0.55rem 0.6rem; text-decoration:none; transition:all .2s;
+    display:flex; align-items:center; justify-content:center; gap:0.3rem;
+  }
+  .nav-links a:hover { color:var(--t1); border-color:rgba(255,255,255,0.22); background:rgba(255,255,255,0.06); }
+
+  /* Validar */
+  .btn-val {
+    width:100%; display:flex; align-items:center; justify-content:center; gap:0.4rem;
+    font-family:var(--mono); font-size:0.82rem; font-weight:700;
+    color:white; background:var(--blue);
+    border:1px solid rgba(59,130,246,0.6); border-radius:9px;
+    padding:0.75rem; cursor:pointer; transition:all .2s;
+    box-shadow:0 4px 16px rgba(59,130,246,0.2); margin-top:0.8rem;
+  }
+  .btn-val:hover    { background:#2563eb; }
+  .btn-val.ok-state { background:#16a34a; border-color:#15803d; box-shadow:0 4px 16px rgba(74,222,128,0.2); }
+  .btn-val.err-state{ background:#991b1b; border-color:#7f1d1d; }
+
+  .feedback {
+    border-radius:9px; padding:0.85rem 0.95rem;
+    margin-top:0.7rem; font-size:0.83rem; line-height:1.65; display:none;
+  }
+  .feedback.show { display:block; }
+  .fb-ok   { background:rgba(74,222,128,0.07);  border:1px solid rgba(74,222,128,0.28);  color:#86efac; }
+  .fb-err  { background:rgba(248,113,113,0.07); border:1px solid rgba(248,113,113,0.28); color:#fca5a5; }
+  .fb-icon  { font-size:1rem; margin-bottom:0.25rem; display:block; }
+  .fb-title { font-weight:700; color:var(--t1); margin-bottom:0.2rem; font-size:0.86rem; }
+
+  /* Terminal BLE */
+  .terminal {
+    background:var(--inner); border-radius:7px; padding:0.8rem 0.95rem;
+    font-family:var(--mono); font-size:0.78rem; color:var(--t2); line-height:1.8;
+    min-height:76px; border:1px solid rgba(255,255,255,0.04);
+  }
+  .tp{color:var(--green);margin-right:0.35rem;} .tok{color:var(--green);} .terr{color:var(--red);}
+  .twarn{color:var(--yellow);} .tinfo{color:var(--blue-l);} .tdim{color:var(--t3);}
+
+  .ble-row { display:flex; gap:0.55rem; margin-top:0.8rem; flex-wrap:wrap; }
+  .btn-ble {
+    display:inline-flex; align-items:center; gap:0.35rem;
+    font-family:var(--mono); font-size:0.76rem; font-weight:600;
+    border-radius:8px; padding:0.5rem 1rem; border:1px solid; cursor:pointer; transition:all .2s;
+  }
+  .btn-ghost { color:var(--t2); background:rgba(255,255,255,0.04); border-color:var(--b1); }
+  .btn-ghost:hover { background:rgba(255,255,255,0.09); color:var(--t1); }
+  .btn-run {
+    color:white; background:var(--blue); border-color:rgba(59,130,246,0.6);
+    box-shadow:0 4px 14px rgba(59,130,246,0.22); flex:1; justify-content:center;
+  }
+  .btn-run:hover:not(:disabled) { background:#2563eb; }
+  .btn-run:disabled { opacity:0.35; cursor:not-allowed; }
+
+  /* Hint */
+  .hint-box {
+    background:rgba(250,204,21,0.05); border:1px solid rgba(250,204,21,0.2); border-radius:9px;
+    padding:0.8rem 0.95rem;
+  }
+  .hint-lbl { font-family:var(--mono); font-size:0.62rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--yellow); margin-bottom:0.28rem; }
+  .hint-txt { font-size:0.82rem; color:#fde68a; line-height:1.65; }
+
+  @media (max-width:899px) { .ex-header { grid-column:1; } }
+</style>
+
+<!-- ═══ NAV ════════════════════════════════════════════════════════════════ -->
+<nav class="topnav">
+  <div class="topnav-inner">
+    <a href="/" class="logo">
+      <div class="logo-icon">🤖</div>
+      <span class="logo-name">Robo<span>Learn</span></span>
+    </a>
+    <div class="breadcrumb">
+      <a href="/">Inicio</a>
+      {tema && (<><span class="bc-sep">/</span><a href={`/teoria/${tema.id}`}>{tema.titulo}</a></>)}
+      <span class="bc-sep">/</span>
+      <span class="bc-cur">{ejercicio.titulo}</span>
+    </div>
+  </div>
+</nav>
+
+<!-- ═══ GRID ════════════════════════════════════════════════════════════════ -->
+<div class="page-grid">
+
+  <!-- ── Header ── -->
+  <div class="ex-header">
+    <div class="ex-badges">
+      {tema    && <span class="badge badge-mod">Módulo {tema.orden} · {tema.titulo}</span>}
+      {subtema && <span class="badge badge-sub">{subtema.titulo}</span>}
+      <span class={`badge badge-${meta.color}`}>{meta.icon} {meta.label}</span>
+    </div>
+    <h1 class="ex-title">{ejercicio.titulo}</h1>
+    <div class="ex-mision">
+      <span class="ex-mision-icon">🎯</span>
       <div>
-        <p class="text-blue-500 font-mono text-sm mb-1">Módulo: {ejercicio.temas.titulo}</p>
-        <h1 class="text-3xl font-bold text-slate-100">{ejercicio.titulo}</h1>
-      </div>
-      <a href="/" class="text-slate-400 hover:text-blue-400 hover:underline text-sm font-medium transition-colors">&larr; Menú Principal</a>
-    </div>
-    
-    <div class="bg-blue-950/40 border-l-4 border-blue-500 p-5 rounded-r-lg mb-8 shadow-md">
-      <h2 class="font-bold text-blue-400 text-sm tracking-wider uppercase mb-2">Misión a resolver:</h2>
-      <p class="text-slate-300 leading-relaxed">{ejercicio.mision}</p>
-    </div>
-
-    <div class="bg-black/60 text-slate-300 p-6 rounded-t-lg font-mono text-sm shadow-inner overflow-x-auto border border-slate-700 border-b-0">
-      <pre><code set:html={codigoRenderizado}></code></pre>
-    </div>
-
-    <div class="bg-slate-900 p-5 rounded-b-lg flex flex-col sm:flex-row sm:items-center justify-between border border-slate-700 gap-4">
-      <div id="terminal" class="text-sm text-slate-500 font-mono truncate">
-        <span class="text-blue-500 mr-2">~</span>Estado: Esperando conexión BLE...
-      </div>
-      <div class="flex gap-3 shrink-0">
-        <button id="btnConectar" class="bg-slate-800 text-slate-300 border border-slate-600 px-4 py-2 rounded text-sm font-medium hover:bg-slate-700 hover:text-white transition-all shadow-sm">
-          Vincular Robot
-        </button>
-        <button id="btnEjecutar" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-bold hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-blue-900/20" disabled>
-          ▶ Ejecutar
-        </button>
+        <div class="mision-label">Misión</div>
+        <p class="mision-text">{ejercicio.mision}</p>
       </div>
     </div>
-  </main>
-</Layout>
+  </div>
 
-<script define:vars={{ comandoEsperado: ejercicio.comando_esperado }}>
-  const btnConectar = document.getElementById('btnConectar');
-  const btnEjecutar = document.getElementById('btnEjecutar');
-  const terminal = document.getElementById('terminal');
+  <!-- ══ COLUMNA IZQUIERDA: panel de ejercicio ══ -->
+  <div>
 
-  btnConectar.addEventListener('click', async () => {
-    try {
-      terminal.innerHTML = `<span class="text-blue-500 mr-2">~</span>Buscando dispositivo...`;
-      const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true });
-      terminal.innerHTML = `<span class="text-green-500 mr-2">✔</span>Conectado a: <span class="text-slate-300">${device.name}</span>`;
-      btnEjecutar.disabled = false;
-    } catch (error) {
-      terminal.innerHTML = `<span class="text-red-500 mr-2">✖</span>Error: ${error.message}`;
-    }
+    <!-- COMPLETAR ESPACIOS -->
+    {tipo === 'completar_espacios' && (
+      <div class="panel">
+        <div class="panel-hdr">
+          <span class="panel-lang">C++ · Completa el espacio</span>
+          <div class="dots"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div></div>
+        </div>
+        <div class="code-body" set:html={buildCompletarHTML(cfg.codigo_base ?? '')} />
+      </div>
+    )}
+
+    <!-- ARRASTRAR BLOQUES -->
+    {tipo === 'arrastrar_bloques' && (
+      <div class="panel" id="panel-drag">
+        <div class="panel-hdr">
+          <span class="panel-lang">C++ · Arrastra los bloques</span>
+          <div class="dots"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div></div>
+        </div>
+        <div class="code-body" id="code-drag" set:html={buildArrastrarHTML(cfg.codigo_base ?? '')} />
+        <div class="blocks-palette" id="palette">
+          {(cfg.bloques_disponibles ?? []).map((b: string, i: number) => (
+            <div class="chip" draggable="true" data-block={b} id={`chip-${i}`}>{b}</div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    <!-- SELECCIÓN MÚLTIPLE -->
+    {tipo === 'seleccion_multiple' && (
+      <div class="panel">
+        <div class="panel-hdr">
+          <span class="panel-lang">C++ · Selección múltiple</span>
+          <div class="dots"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div></div>
+        </div>
+        <div class="code-body" set:html={buildSeleccionHTML(cfg.codigo_base ?? '')} />
+        <div class="opciones-row">
+          {(cfg.opciones ?? []).map((op: string, i: number) => (
+            <button class="opcion" data-idx={i}>{op}</button>
+          ))}
+        </div>
+      </div>
+    )}
+
+    <!-- ORDENAR LÍNEAS -->
+    {tipo === 'ordenar_lineas' && (
+      <div class="panel">
+        <div class="panel-hdr">
+          <span class="panel-lang">C++ · Ordena las líneas</span>
+          <div class="dots"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div></div>
+        </div>
+        <div class="sort-list" id="sort-list">
+          {(cfg.lineas_desordenadas ?? []).map((linea: string) => (
+            <div class="sort-item" draggable="true" data-linea={linea}>
+              <span class="sort-handle">⠿</span>
+              <span class="sort-code" set:html={syn(esc(linea))} />
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    <!-- DETECTAR BUG -->
+    {tipo === 'detectar_bug' && (
+      <div class="panel">
+        <div class="panel-hdr">
+          <span class="panel-lang">C++ · Encuentra el bug</span>
+          <div class="dots"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div></div>
+        </div>
+        <div class="bug-list" id="bug-list">
+          {(cfg.codigo_completo ?? []).map((linea: string, i: number) => (
+            <div class="bug-line" data-idx={i}>
+              <span class="bug-num">{i + 1}</span>
+              <span class="bug-code" set:html={syn(esc(linea))} />
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+  </div>
+
+  <!-- ══ SIDEBAR ══ -->
+  <div class="side-panel">
+
+    <!-- 1. NAVEGACIÓN (arriba de todo) -->
+    <div class="sc-panel">
+      <div class="sc-hdr"><span class="sc-title">Navegación</span></div>
+      <div class="sc-body">
+        <div class="nav-links">
+          <a href="/">← Menú</a>
+          {tema && <a href={`/teoria/${tema.id}`}>📖 Teoría</a>}
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. INSTRUCCIONES + VALIDAR -->
+    <div class="sc-panel">
+      <div class="sc-hdr">
+        <span style="font-size:1rem;">{meta.icon}</span>
+        <span class="sc-title">Cómo resolver</span>
+      </div>
+      <div class="sc-body">
+        <p style="font-size:0.84rem;color:var(--t2);line-height:1.65;">{meta.desc}</p>
+        <button class="btn-val" id="btn-val">Verificar respuesta ✓</button>
+        <div class="feedback" id="feedback">
+          <span class="fb-icon" id="fb-icon"></span>
+          <div class="fb-title" id="fb-title"></div>
+          <div id="fb-msg"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. ROBOT BLE -->
+    <div class="sc-panel">
+      <div class="sc-hdr"><span class="sc-title">🤖 Robot BLE</span></div>
+      <div class="sc-body">
+        <div class="terminal" id="terminal">
+          <span class="tdim"><span class="tp">~</span>Esperando conexión BLE...</span>
+        </div>
+        <div class="ble-row">
+          <button class="btn-ble btn-ghost" id="btn-conectar">📡 Vincular</button>
+          <button class="btn-ble btn-run"   id="btn-run" disabled>▶ Ejecutar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. EXPLICACIÓN BUG (oculta hasta acertar) -->
+    {cfg.explicacion_bug && (
+      <div class="sc-panel" id="hint-panel" style="display:none;">
+        <div class="sc-hdr"><span class="sc-title">💡 Explicación del bug</span></div>
+        <div class="sc-body">
+          <div class="hint-box">
+            <div class="hint-lbl">¿Por qué es un error?</div>
+            <p class="hint-txt">{cfg.explicacion_bug}</p>
+          </div>
+        </div>
+      </div>
+    )}
+
+  </div>
+</div>
+
+<!-- ═══ CLIENT SCRIPT ══════════════════════════════════════════════════════ -->
+<script define:vars={{ cfgJSON, tipoStr, cmdEsperado: ejercicio.comando_esperado }}>
+
+const cfg  = JSON.parse(cfgJSON);
+const tipo = tipoStr;
+
+// ── Estado ────────────────────────────────────────────────────────────────────
+let bleDevice     = null;
+let selOpcion     = null;          // seleccion_multiple: índice elegido
+let dropState     = {};            // arrastrar: { "1": valor, "2": valor, … }
+let dragChip      = null;          // chip que se está arrastrando
+let bugSel        = null;          // detectar_bug: índice de línea clicada
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  if (tipo === 'arrastrar_bloques')  initDrag();
+  if (tipo === 'ordenar_lineas')     initSort();
+  if (tipo === 'seleccion_multiple') initSelect();
+  if (tipo === 'detectar_bug')       initBug();
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 1. COMPLETAR ESPACIOS — sólo necesitamos leer el input
+// ══════════════════════════════════════════════════════════════════════════════
+function getCompletarVal() {
+  const el = document.getElementById('inp-completar');
+  return el ? el.value.trim() : '';
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 2. ARRASTRAR BLOQUES
+// ══════════════════════════════════════════════════════════════════════════════
+function initDrag() {
+  // Chips → dragstart
+  document.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('dragstart', e => {
+      dragChip = chip;
+      e.dataTransfer.setData('text/plain', chip.dataset.block);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    chip.addEventListener('dragend', () => {
+      // si no se soltó en ninguna zona válida, no hacer nada
+      dragChip = null;
+    });
   });
 
-  btnEjecutar.addEventListener('click', () => {
-    const inputEstudiante = document.getElementById('valorInput').value;
-    
-    if (inputEstudiante > 100 || inputEstudiante < 0) {
-      terminal.innerHTML = `<span class="text-yellow-500 mr-2">⚠</span>ADVERTENCIA: Valor ${inputEstudiante} fuera de rango. Fallo inminente.`;
-    } else {
-      terminal.innerHTML = `<span class="text-green-500 mr-2">▶</span>Ejecutando: <span class="text-slate-300">AVANZAR_${inputEstudiante}</span>`;
-    }
+  // Drop-zones → dragover + dragleave + drop
+  document.querySelectorAll('.drop-zone').forEach(zone => {
+    zone.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      zone.classList.add('over');
+    });
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault();
+      zone.classList.remove('over');
+      const val = e.dataTransfer.getData('text/plain');
+      if (!val) return;
+
+      // Si la zona ya tenía un valor, devolver el chip anterior
+      const prevVal = dropState[zone.dataset.drop];
+      if (prevVal) {
+        document.querySelectorAll('.chip').forEach(c => {
+          if (c.dataset.block === prevVal) c.classList.remove('used');
+        });
+      }
+
+      dropState[zone.dataset.drop] = val;
+      zone.textContent = val;
+      zone.classList.remove('err', 'ok');
+      zone.classList.add('filled');
+
+      // Marcar chip como usado
+      if (dragChip) { dragChip.classList.add('used'); dragChip = null; }
+    });
   });
+}
+
+function validateDrag() {
+  const sol = cfg.solucion_esperada ?? {};
+  let allOk = true;
+  let allFilled = true;
+  document.querySelectorAll('.drop-zone').forEach(zone => {
+    const key = `___DROP_${zone.dataset.drop}___`;
+    const actual   = dropState[zone.dataset.drop];
+    const expected = sol[key];
+    if (!actual) { allFilled = false; return; }
+    zone.classList.remove('ok','err','filled');
+    if (actual === expected) { zone.classList.add('ok'); }
+    else                     { zone.classList.add('err'); allOk = false; }
+  });
+  return allFilled && allOk;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 3. SELECCIÓN MÚLTIPLE
+// ══════════════════════════════════════════════════════════════════════════════
+function initSelect() {
+  document.querySelectorAll('.opcion').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.idx);
+      selOpcion = idx;
+      const val = btn.textContent;
+      document.querySelectorAll('.opcion').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      const ph = document.getElementById('select-chosen');
+      if (ph) ph.textContent = val;
+    });
+  });
+}
+
+function validateSelect() {
+  const correcto = cfg.indice_correcto ?? 0;
+  const ok = selOpcion === correcto;
+  document.querySelectorAll('.opcion').forEach((b, i) => {
+    b.classList.remove('ok','err','selected');
+    if (i === correcto)                   b.classList.add('ok');
+    else if (i === selOpcion && !ok)      b.classList.add('err');
+  });
+  const ph = document.getElementById('select-chosen');
+  if (ph) {
+    ph.classList.remove('ok','err');
+    ph.classList.add(ok ? 'ok' : (selOpcion !== null ? 'err' : ''));
+  }
+  return ok;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 4. ORDENAR LÍNEAS
+// ══════════════════════════════════════════════════════════════════════════════
+function initSort() {
+  const list = document.getElementById('sort-list');
+  if (!list) return;
+  let src = null;
+
+  list.addEventListener('dragstart', e => {
+    src = e.target.closest('.sort-item');
+    if (src) { src.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; }
+  });
+  list.addEventListener('dragend', () => {
+    document.querySelectorAll('.sort-item').forEach(el =>
+      el.classList.remove('dragging','dt','db'));
+    src = null;
+  });
+  list.addEventListener('dragover', e => {
+    e.preventDefault();
+    const target = e.target.closest('.sort-item');
+    if (!target || target === src) return;
+    document.querySelectorAll('.sort-item').forEach(el => el.classList.remove('dt','db'));
+    const mid = target.getBoundingClientRect().top + target.offsetHeight / 2;
+    target.classList.add(e.clientY < mid ? 'dt' : 'db');
+  });
+  list.addEventListener('drop', e => {
+    e.preventDefault();
+    const target = e.target.closest('.sort-item');
+    if (!target || !src || target === src) return;
+    const before = target.classList.contains('dt');
+    list.insertBefore(src, before ? target : target.nextSibling);
+  });
+}
+
+function validateSort() {
+  const correct = cfg.orden_correcto ?? [];
+  const items   = [...document.querySelectorAll('.sort-item')];
+  const current = items.map(el => el.dataset.linea);
+  const ok = current.every((l, i) => l === correct[i]);
+  items.forEach((el, i) => {
+    el.classList.remove('ok','err');
+    el.classList.add(el.dataset.linea === correct[i] ? 'ok' : 'err');
+  });
+  return ok;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 5. DETECTAR BUG
+// ══════════════════════════════════════════════════════════════════════════════
+function initBug() {
+  document.querySelectorAll('.bug-line').forEach(line => {
+    line.addEventListener('click', () => {
+      bugSel = parseInt(line.dataset.idx);
+      document.querySelectorAll('.bug-line').forEach(l => l.classList.remove('hi','ok','err'));
+      line.classList.add('hi');
+    });
+  });
+}
+
+function validateBug() {
+  const correcto = cfg.linea_con_error ?? 0;
+  const ok = bugSel === correcto;
+  document.querySelectorAll('.bug-line').forEach((el, i) => {
+    el.classList.remove('hi','ok','err');
+    if (i === correcto)             el.classList.add('ok');
+    else if (i === bugSel && !ok)   el.classList.add('err');
+  });
+  if (ok) {
+    const hint = document.getElementById('hint-panel');
+    if (hint) hint.style.display = 'block';
+  }
+  return ok;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// VALIDAR CENTRAL
+// ══════════════════════════════════════════════════════════════════════════════
+document.getElementById('btn-val')?.addEventListener('click', () => {
+  let ok = false;
+  if      (tipo === 'completar_espacios') ok = getCompletarVal() === (cfg.respuesta_correcta ?? '');
+  else if (tipo === 'arrastrar_bloques')  ok = validateDrag();
+  else if (tipo === 'seleccion_multiple') ok = validateSelect();
+  else if (tipo === 'ordenar_lineas')     ok = validateSort();
+  else if (tipo === 'detectar_bug')       ok = validateBug();
+
+  // Feedback visual en input de completar
+  if (tipo === 'completar_espacios') {
+    const inp = document.getElementById('inp-completar');
+    if (inp) { inp.classList.toggle('ok', ok); inp.classList.toggle('err', !ok); }
+  }
+
+  const fb    = document.getElementById('feedback');
+  const ficon = document.getElementById('fb-icon');
+  const ftit  = document.getElementById('fb-title');
+  const fmsg  = document.getElementById('fb-msg');
+  const btnV  = document.getElementById('btn-val');
+
+  fb.className    = 'feedback show ' + (ok ? 'fb-ok' : 'fb-err');
+  ficon.textContent = ok ? '✅' : '❌';
+  ftit.textContent  = ok ? '¡Correcto! Excelente trabajo.' : 'Casi… sigue intentando.';
+  fmsg.textContent  = ok
+    ? 'Solución válida. Puedes ejecutarla en el robot o avanzar al siguiente ejercicio.'
+    : 'Revisa tu respuesta con cuidado. ¡Cada error es parte del aprendizaje!';
+
+  btnV.className   = 'btn-val ' + (ok ? 'ok-state' : 'err-state');
+  btnV.textContent = ok ? '✓ ¡Correcto!' : '✗ Reintentar';
+
+  if (ok) {
+    const t = document.getElementById('terminal');
+    if (t && !bleDevice) t.innerHTML = `<span class="tok">✔</span> <span class="tdim">Solución válida — conecta el robot para ejecutar.</span>`;
+    setTimeout(() => {
+      btnV.className   = 'btn-val';
+      btnV.textContent = 'Verificar respuesta ✓';
+    }, 3500);
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BLE
+// ══════════════════════════════════════════════════════════════════════════════
+document.getElementById('btn-conectar')?.addEventListener('click', async () => {
+  const t   = document.getElementById('terminal');
+  const run = document.getElementById('btn-run');
+  try {
+    t.innerHTML = `<span class="tinfo">◌</span> <span class="tdim">Buscando dispositivo BLE...</span>`;
+    bleDevice = await navigator.bluetooth.requestDevice({ acceptAllDevices: true });
+    t.innerHTML = `<span class="tok">✔</span> Conectado a <strong style="color:var(--t1)">${bleDevice.name}</strong>`;
+    if (run) run.disabled = false;
+  } catch (err) {
+    t.innerHTML = `<span class="terr">✖</span> ${err.message}`;
+    bleDevice = null;
+  }
+});
+
+document.getElementById('btn-run')?.addEventListener('click', () => {
+  const t = document.getElementById('terminal');
+  t.innerHTML = `<span class="tok">▶</span> Enviando: <strong style="color:var(--t1)">${cmdEsperado}</strong>`;
+});
 </script>
+</Layout>

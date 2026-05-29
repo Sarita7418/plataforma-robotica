@@ -10,16 +10,6 @@ const { title } = Astro.props;
     <title>{title} | Plataforma Robótica</title>
   </head>
   <body class="bg-slate-900 text-slate-300 min-h-screen selection:bg-blue-500 selection:text-white">
-    <nav class="bg-slate-950 border-b border-slate-800 p-4 shadow-lg">
-      <div class="max-w-6xl mx-auto flex justify-between items-center">
-        <a href="/" class="text-xl font-bold tracking-wide text-slate-100">
-          Robo<span class="text-blue-500">Logic</span> Edu
-        </a>
-        <span class="text-xs font-medium bg-blue-900/30 text-blue-400 px-3 py-1 rounded-full border border-blue-800/50">
-          Modo Estudiante
-        </span>
-      </div>
-    </nav>
     <slot />
   </body>
 </html>
